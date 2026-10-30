@@ -1,6 +1,6 @@
 # Book My Ticket — Database Design
 
-PostgreSQL 17 · Prisma 7 · Status: **approved; DDL verified on Postgres 17** (Prisma schema not written yet, it starts in milestone 1)
+PostgreSQL 17 · Prisma 7 · Status: **approved; DDL verified on Postgres 17** (Prisma schema and migrations written; see [project foundation setup, database](../project-foundation-setup/02-database.md))
 
 Read [project-architecture](../project-architecture/project-architecture.md) first for the big picture and [system-design](../system-design/system-design.md) for *why* the schema looks like this (seat holds, ledger, outbox).
 

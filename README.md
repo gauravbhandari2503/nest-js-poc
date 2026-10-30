@@ -51,16 +51,57 @@ The `certs/` folder is gitignored: mkcert certificates are only trusted on the m
 $ cp .env.example .env     # then adjust values if needed
 $ pnpm infra:up            # Postgres (5433), Redis (6379), Mailpit (SMTP 1025, UI http://localhost:8025)
 $ pnpm prisma:generate     # generate the Prisma client into src/generated
+$ pnpm prisma:migrate      # create the schema in the dev database
+$ pnpm prisma:migrate:test # same for the test database (book_my_ticket_test)
+```
+
+Then start the app and, optionally, the database UI (each in its own terminal):
+
+```bash
+$ pnpm start:dev           # API with hot reload (frees PORT first if it is still in use)
+$ pnpm start:worker        # BullMQ worker, only needed when working on queues/cron
+$ pnpm prisma:studio       # Prisma Studio, the database UI at http://localhost:5555 (keep the terminal open)
 ```
 
 | URL | What |
 | --- | --- |
+| `http://localhost:5555` | Prisma Studio (database UI) |
 | `https://bookmyticket.test:3000/docs` | Swagger UI (`/docs-json` for the spec) |
 | `https://bookmyticket.test:3000/health` | Postgres + Redis health |
 | `https://bookmyticket.test:3000/queues` | Bull Board |
 
 The worker process (BullMQ processors, cron) runs separately: `pnpm start:worker`.
 The app validates its env with Zod at boot and fails fast if anything is missing.
+
+## Database
+
+PostgreSQL 17 runs in Docker on **host port 5433** (not 5432, so it does not clash with a local Postgres).
+
+| Setting | Dev database | Test database |
+| --- | --- | --- |
+| URL | `postgresql://postgres:postgres@localhost:5433/book_my_ticket` | `postgresql://postgres:postgres@localhost:5433/book_my_ticket_test` |
+| Host / port | `localhost` / `5433` | `localhost` / `5433` |
+| Database | `book_my_ticket` | `book_my_ticket_test` |
+| User / password | `postgres` / `postgres` | `postgres` / `postgres` |
+
+### Look at the data in a UI
+
+```bash
+$ pnpm prisma:studio       # http://localhost:5555, browse and edit rows
+```
+
+Or connect any Postgres client with the settings above:
+
+- **pgAdmin / DBeaver / TablePlus / DataGrip / VS Code PostgreSQL extension**: new connection, type *PostgreSQL*, fill in host, port, database, user and password from the table.
+- **MySQL Workbench cannot be used**: it only speaks MySQL, and this project uses PostgreSQL. Use pgAdmin (free, https://www.pgadmin.org) or DBeaver Community instead. Step-by-step instructions: [project foundation setup, database](.claude/docs/project-foundation-setup/02-database.md#connect-a-database-ui).
+
+### Migrations
+
+```bash
+$ pnpm prisma:migrate                  # apply pending migrations to the dev DB (creates new ones when schema.prisma changed)
+$ pnpm prisma:migrate:test             # apply to the test DB
+$ pnpm test:e2e test/db                # integration tests that keep the constraints alive
+```
 
 ## Compile and run the project
 
@@ -70,6 +111,9 @@ $ pnpm run start
 
 # watch mode
 $ pnpm run start:dev
+
+# `start`, `start:dev` and `start:debug` first stop whatever still listens on PORT
+# (scripts/free-port.mjs), so a leftover process never causes EADDRINUSE.
 
 # production mode
 $ pnpm run start:prod

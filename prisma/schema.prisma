@@ -1,7 +1,6 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
+// Book My Ticket schema. Design: .claude/docs/database-design/database-design.md
+// Constraints Prisma cannot express (partial unique indexes, exclusion constraints,
+// CHECKs, triggers) live in hand-written migration SQL: see prisma/migrations/*_hand_written_constraints.
 
 generator client {
   provider = "prisma-client"
@@ -10,4 +9,962 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+}
+
+enum UserKind {
+  SUPER_ADMIN
+  STAFF
+  CLIENT
+
+  @@map("user_kind")
+}
+
+enum UserStatus {
+  INVITED
+  ACTIVE
+  DISABLED
+
+  @@map("user_status")
+}
+
+enum CompanyStatus {
+  ACTIVE
+  SUSPENDED
+
+  @@map("company_status")
+}
+
+enum AuthTokenPurpose {
+  SET_PASSWORD
+  RESET_PASSWORD
+
+  @@map("auth_token_purpose")
+}
+
+enum ShowStatus {
+  SCHEDULED
+  CANCELLED
+  COMPLETED
+
+  @@map("show_status")
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  EXPIRED
+  CANCELLED
+  COMPLETED
+
+  @@map("booking_status")
+}
+
+enum SeatHoldStatus {
+  HELD
+  SOLD
+  RELEASED
+
+  @@map("seat_hold_status")
+}
+
+enum FoodSlot {
+  PRE_INTERVAL
+  POST_INTERVAL
+
+  @@map("food_slot")
+}
+
+enum TicketStatus {
+  ISSUED
+  USED
+  VOID
+
+  @@map("ticket_status")
+}
+
+enum PaymentKind {
+  BOOKING
+  MEMBERSHIP
+
+  @@map("payment_kind")
+}
+
+enum PaymentStatus {
+  INITIATED
+  SUCCEEDED
+  FAILED
+
+  @@map("payment_status")
+}
+
+enum RefundStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+
+  @@map("refund_status")
+}
+
+enum RefundRequestStatus {
+  REQUESTED
+  APPROVED
+  REJECTED
+  REFUNDED
+
+  @@map("refund_request_status")
+}
+
+enum MembershipStatus {
+  PENDING
+  ACTIVE
+  FAILED
+
+  @@map("membership_status")
+}
+
+enum TaxItemType {
+  TICKET
+  FOOD
+  MEMBERSHIP
+
+  @@map("tax_item_type")
+}
+
+enum LedgerAccount {
+  COMPANY_PAYABLE
+  PLATFORM_INCOME
+
+  @@map("ledger_account")
+}
+
+enum LedgerEntryType {
+  TICKET_PAYOUT
+  TICKET_COMMISSION
+  FOOD_PAYOUT
+  FOOD_COMMISSION
+  MEMBERSHIP_PAYOUT
+  MEMBERSHIP_COMMISSION
+  REGISTRATION_FEE
+  SETTLEMENT
+  ADJUSTMENT
+
+  @@map("ledger_entry_type")
+}
+
+enum SupportTicketType {
+  HELP
+  MAINTENANCE
+  PLATFORM_REQUEST
+
+  @@map("support_ticket_type")
+}
+
+enum SupportTicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+
+  @@map("support_ticket_status")
+}
+
+enum WorkerRole {
+  GATE
+  MAINTENANCE
+
+  @@map("worker_role")
+}
+
+model User {
+  id                    String                 @id @default(uuid(7)) @db.Uuid
+  kind                  UserKind
+  email                 String                 @unique @db.Citext
+  passwordHash          String?                @map("password_hash")
+  fullName              String                 @map("full_name")
+  phone                 String?
+  status                UserStatus
+  lastLoginAt           DateTime?              @map("last_login_at") @db.Timestamptz(3)
+  createdAt             DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt             DateTime               @updatedAt @map("updated_at") @db.Timestamptz(3)
+  staff                 CompanyStaff?
+  refreshTokens         RefreshToken[]
+  authTokens            AuthToken[]
+  bookings              Booking[]
+  customerMemberships   CustomerMembership[]
+  payments              Payment[]
+  onboardedCompanies    Company[]              @relation("CompanyOnboardedBy")
+  staffInvitationsSent  StaffInvitation[]
+  taxRatesCreated       TaxRate[]
+  refundRequestsMade    RefundRequest[]        @relation("RefundRequestedBy")
+  refundRequestsDecided RefundRequest[]        @relation("RefundDecidedBy")
+  ledgerEntriesCreated  LedgerEntry[]
+  settlementsRecorded   Settlement[]
+  ticketsRaised         SupportTicket[]        @relation("TicketRaisedBy")
+  ticketsAssigned       SupportTicket[]        @relation("TicketAssignedTo")
+  ticketMessages        SupportTicketMessage[]
+  workerActions         WorkerAssignment[]
+  auditLogs             AuditLog[]
+  idempotencyKeys       IdempotencyKey[]
+
+  @@map("users")
+}
+
+model Company {
+  id                      String                   @id @default(uuid(7)) @db.Uuid
+  name                    String
+  slug                    String                   @unique
+  status                  CompanyStatus            @default(ACTIVE)
+  salesCommissionBps      Int                      @map("sales_commission_bps")
+  membershipCommissionBps Int                      @map("membership_commission_bps")
+  registrationFee         Int                      @map("registration_fee")
+  registrationFeePaidAt   DateTime?                @map("registration_fee_paid_at") @db.Timestamptz(3)
+  cancellationPolicy      String                   @map("cancellation_policy")
+  refundPolicy            String                   @map("refund_policy")
+  onboardedBy             String                   @map("onboarded_by") @db.Uuid
+  onboardedByUser         User                     @relation("CompanyOnboardedBy", fields: [onboardedBy], references: [id])
+  createdAt               DateTime                 @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt               DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(3)
+  staff                   CompanyStaff[]
+  roles                   Role[]
+  staffInvitations        StaffInvitation[]
+  theaters                Theater[]
+  seatCategories          SeatCategory[]
+  foodItems               FoodItem[]
+  membershipOffers        CompanyMembershipOffer[]
+  customerMemberships     CustomerMembership[]
+  ledgerEntries           LedgerEntry[]
+  settlements             Settlement[]
+  supportTickets          SupportTicket[]
+  workerAssignments       WorkerAssignment[]
+
+  @@map("companies")
+}
+
+model CompanyStaff {
+  id            String         @id @default(uuid(7)) @db.Uuid
+  companyId     String         @map("company_id") @db.Uuid
+  company       Company        @relation(fields: [companyId], references: [id])
+  userId        String         @unique @map("user_id") @db.Uuid
+  user          User           @relation(fields: [userId], references: [id])
+  roleId        String         @map("role_id") @db.Uuid
+  role          Role           @relation(fields: [roleId], references: [id])
+  isOwner       Boolean        @default(false) @map("is_owner")
+  deactivatedAt DateTime?      @map("deactivated_at") @db.Timestamptz(3)
+  createdAt     DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
+  theaters      StaffTheater[]
+
+  @@index([companyId])
+  @@index([roleId])
+  @@map("company_staff")
+}
+
+model StaffTheater {
+  staffId   String       @map("staff_id") @db.Uuid
+  staff     CompanyStaff @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  theaterId String       @map("theater_id") @db.Uuid
+  theater   Theater      @relation(fields: [theaterId], references: [id], onDelete: Cascade)
+  createdAt DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@id([staffId, theaterId])
+  @@index([theaterId])
+  @@map("staff_theaters")
+}
+
+model Permission {
+  id          String           @id @default(uuid(7)) @db.Uuid
+  code        String           @unique
+  description String
+  createdAt   DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+  roles       RolePermission[]
+
+  @@map("permissions")
+}
+
+model Role {
+  id          String            @id @default(uuid(7)) @db.Uuid
+  name        String
+  companyId   String?           @map("company_id") @db.Uuid
+  company     Company?          @relation(fields: [companyId], references: [id])
+  isSystem    Boolean           @default(false) @map("is_system")
+  createdAt   DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
+  permissions RolePermission[]
+  staff       CompanyStaff[]
+  invitations StaffInvitation[]
+
+  @@index([companyId])
+  @@map("roles")
+}
+
+model RolePermission {
+  roleId       String     @map("role_id") @db.Uuid
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permissionId String     @map("permission_id") @db.Uuid
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@id([roleId, permissionId])
+  @@index([permissionId])
+  @@map("role_permissions")
+}
+
+model StaffInvitation {
+  id         String    @id @default(uuid(7)) @db.Uuid
+  companyId  String    @map("company_id") @db.Uuid
+  company    Company   @relation(fields: [companyId], references: [id])
+  email      String    @db.Citext
+  roleId     String    @map("role_id") @db.Uuid
+  role       Role      @relation(fields: [roleId], references: [id])
+  theaterIds String[]  @map("theater_ids") @db.Uuid
+  tokenHash  String    @unique @map("token_hash")
+  expiresAt  DateTime  @map("expires_at") @db.Timestamptz(3)
+  acceptedAt DateTime? @map("accepted_at") @db.Timestamptz(3)
+  invitedBy  String    @map("invited_by") @db.Uuid
+  inviter    User      @relation(fields: [invitedBy], references: [id])
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@index([companyId])
+  @@index([email])
+  @@map("staff_invitations")
+}
+
+model AuthToken {
+  id        String           @id @default(uuid(7)) @db.Uuid
+  userId    String           @map("user_id") @db.Uuid
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  purpose   AuthTokenPurpose
+  tokenHash String           @unique @map("token_hash")
+  expiresAt DateTime         @map("expires_at") @db.Timestamptz(3)
+  usedAt    DateTime?        @map("used_at") @db.Timestamptz(3)
+  createdAt DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([userId])
+  @@map("auth_tokens")
+}
+
+model RefreshToken {
+  id         String    @id @default(uuid(7)) @db.Uuid
+  userId     String    @map("user_id") @db.Uuid
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  familyId   String    @map("family_id") @db.Uuid
+  tokenHash  String    @unique @map("token_hash")
+  expiresAt  DateTime  @map("expires_at") @db.Timestamptz(3)
+  revokedAt  DateTime? @map("revoked_at") @db.Timestamptz(3)
+  replacedBy String?   @map("replaced_by") @db.Uuid
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([userId])
+  @@index([familyId])
+  @@map("refresh_tokens")
+}
+
+model City {
+  id        String    @id @default(uuid(7)) @db.Uuid
+  name      String
+  state     String
+  isActive  Boolean   @default(true) @map("is_active")
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  theaters  Theater[]
+
+  @@unique([name, state])
+  @@map("cities")
+}
+
+model Theater {
+  id                String             @id @default(uuid(7)) @db.Uuid
+  companyId         String             @map("company_id") @db.Uuid
+  company           Company            @relation(fields: [companyId], references: [id])
+  cityId            String             @map("city_id") @db.Uuid
+  city              City               @relation(fields: [cityId], references: [id])
+  name              String
+  address           String
+  pincode           String
+  deletedAt         DateTime?          @map("deleted_at") @db.Timestamptz(3)
+  createdAt         DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
+  screens           Screen[]
+  foodItems         FoodItem[]
+  staffAssignments  StaffTheater[]
+  supportTickets    SupportTicket[]
+  workerAssignments WorkerAssignment[]
+
+  @@unique([companyId, id])
+  @@index([companyId])
+  @@index([cityId])
+  @@map("theaters")
+}
+
+model Screen {
+  id        String    @id @default(uuid(7)) @db.Uuid
+  companyId String    @map("company_id") @db.Uuid
+  theaterId String    @map("theater_id") @db.Uuid
+  theater   Theater   @relation(fields: [companyId, theaterId], references: [companyId, id])
+  name      String
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(3)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  seats     Seat[]
+  shows     Show[]
+
+  @@unique([companyId, id])
+  @@index([theaterId])
+  @@map("screens")
+}
+
+model SeatCategory {
+  id           String        @id @default(uuid(7)) @db.Uuid
+  companyId    String        @map("company_id") @db.Uuid
+  company      Company       @relation(fields: [companyId], references: [id])
+  name         String
+  sortOrder    Int           @default(0) @map("sort_order")
+  createdAt    DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
+  seats        Seat[]
+  showPrices   ShowPrice[]
+  bookingSeats BookingSeat[]
+
+  @@unique([companyId, name])
+  @@unique([companyId, id])
+  @@map("seat_categories")
+}
+
+model Seat {
+  id             String        @id @default(uuid(7)) @db.Uuid
+  companyId      String        @map("company_id") @db.Uuid
+  screenId       String        @map("screen_id") @db.Uuid
+  screen         Screen        @relation(fields: [companyId, screenId], references: [companyId, id])
+  seatCategoryId String        @map("seat_category_id") @db.Uuid
+  seatCategory   SeatCategory  @relation(fields: [companyId, seatCategoryId], references: [companyId, id])
+  rowLabel       String        @map("row_label")
+  seatNumber     Int           @map("seat_number")
+  colIndex       Int           @map("col_index")
+  isActive       Boolean       @default(true) @map("is_active")
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
+  bookingSeats   BookingSeat[]
+
+  @@unique([screenId, rowLabel, seatNumber])
+  @@index([screenId])
+  @@index([seatCategoryId])
+  @@map("seats")
+}
+
+model Movie {
+  id              String    @id @default(uuid(7)) @db.Uuid
+  title           String
+  description     String
+  durationMinutes Int       @map("duration_minutes")
+  language        String
+  certification   String
+  genres          String[]
+  releaseDate     DateTime  @map("release_date") @db.Date
+  posterKey       String?   @map("poster_key")
+  deletedAt       DateTime? @map("deleted_at") @db.Timestamptz(3)
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  shows           Show[]
+
+  @@index([genres], type: Gin, map: "movies_genres_gin_idx")
+  @@index([title(ops: raw("gin_trgm_ops"))], type: Gin, map: "movies_title_trgm_idx")
+  @@map("movies")
+}
+
+model Show {
+  id                      String      @id @default(uuid(7)) @db.Uuid
+  companyId               String      @map("company_id") @db.Uuid
+  screenId                String      @map("screen_id") @db.Uuid
+  screen                  Screen      @relation(fields: [companyId, screenId], references: [companyId, id])
+  movieId                 String      @map("movie_id") @db.Uuid
+  movie                   Movie       @relation(fields: [movieId], references: [id])
+  startsAt                DateTime    @map("starts_at") @db.Timestamptz(3)
+  intervalOffsetMinutes   Int         @map("interval_offset_minutes")
+  intervalDurationMinutes Int         @map("interval_duration_minutes")
+  endsAt                  DateTime    @map("ends_at") @db.Timestamptz(3)
+  status                  ShowStatus  @default(SCHEDULED)
+  createdAt               DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt               DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
+  prices                  ShowPrice[]
+  bookings                Booking[]
+
+  @@unique([companyId, id])
+  @@index([screenId, startsAt])
+  @@index([companyId, startsAt(sort: Desc)])
+  @@index([movieId])
+  @@map("shows")
+}
+
+model ShowPrice {
+  showId         String       @map("show_id") @db.Uuid
+  show           Show         @relation(fields: [showId], references: [id], onDelete: Cascade)
+  seatCategoryId String       @map("seat_category_id") @db.Uuid
+  seatCategory   SeatCategory @relation(fields: [seatCategoryId], references: [id])
+  price          Int
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@id([showId, seatCategoryId])
+  @@index([seatCategoryId])
+  @@map("show_prices")
+}
+
+model FoodItem {
+  id           String            @id @default(uuid(7)) @db.Uuid
+  companyId    String            @map("company_id") @db.Uuid
+  company      Company           @relation(fields: [companyId], references: [id])
+  theaterId    String?           @map("theater_id") @db.Uuid
+  theater      Theater?          @relation(fields: [theaterId], references: [id])
+  name         String
+  price        Int
+  isAvailable  Boolean           @default(true) @map("is_available")
+  deletedAt    DateTime?         @map("deleted_at") @db.Timestamptz(3)
+  createdAt    DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
+  bookingLines BookingFoodLine[]
+
+  @@index([companyId])
+  @@index([theaterId])
+  @@map("food_items")
+}
+
+model Booking {
+  id                   String              @id @default(uuid(7)) @db.Uuid
+  reference            String              @unique
+  companyId            String              @map("company_id") @db.Uuid
+  showId               String              @map("show_id") @db.Uuid
+  show                 Show                @relation(fields: [companyId, showId], references: [companyId, id])
+  customerId           String              @map("customer_id") @db.Uuid
+  customer             User                @relation(fields: [customerId], references: [id])
+  status               BookingStatus       @default(PENDING)
+  heldUntil            DateTime            @map("held_until") @db.Timestamptz(3)
+  customerMembershipId String?             @map("customer_membership_id") @db.Uuid
+  customerMembership   CustomerMembership? @relation(fields: [customerMembershipId], references: [id])
+  discountBps          Int                 @default(0) @map("discount_bps")
+  commissionBps        Int                 @map("commission_bps")
+  seatsSubtotal        Int                 @map("seats_subtotal")
+  discountAmount       Int                 @default(0) @map("discount_amount")
+  foodSubtotal         Int                 @default(0) @map("food_subtotal")
+  taxAmount            Int                 @default(0) @map("tax_amount")
+  totalAmount          Int                 @map("total_amount")
+  paidAmount           Int                 @default(0) @map("paid_amount")
+  refundedAmount       Int                 @default(0) @map("refunded_amount")
+  ledgerRecognisedAt   DateTime?           @map("ledger_recognised_at") @db.Timestamptz(3)
+  confirmedAt          DateTime?           @map("confirmed_at") @db.Timestamptz(3)
+  cancelledAt          DateTime?           @map("cancelled_at") @db.Timestamptz(3)
+  completedAt          DateTime?           @map("completed_at") @db.Timestamptz(3)
+  cancelReason         String?             @map("cancel_reason")
+  createdAt            DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt            DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+  seats                BookingSeat[]
+  foodLines            BookingFoodLine[]
+  ticket               Ticket?
+  payments             Payment[]
+  refundRequests       RefundRequest[]
+  invoices             Invoice[]
+  ledgerEntries        LedgerEntry[]
+  supportTickets       SupportTicket[]
+
+  @@index([customerId, createdAt(sort: Desc)])
+  @@index([companyId, showId])
+  @@index([companyId, completedAt])
+  @@index([customerMembershipId])
+  @@map("bookings")
+}
+
+model BookingSeat {
+  id             String         @id @default(uuid(7)) @db.Uuid
+  bookingId      String         @map("booking_id") @db.Uuid
+  booking        Booking        @relation(fields: [bookingId], references: [id])
+  showId         String         @map("show_id") @db.Uuid
+  seatId         String         @map("seat_id") @db.Uuid
+  seat           Seat           @relation(fields: [seatId], references: [id])
+  seatCategoryId String         @map("seat_category_id") @db.Uuid
+  seatCategory   SeatCategory   @relation(fields: [seatCategoryId], references: [id])
+  status         SeatHoldStatus
+  heldUntil      DateTime       @map("held_until") @db.Timestamptz(3)
+  unitPrice      Int            @map("unit_price")
+  discountAmount Int            @default(0) @map("discount_amount")
+  taxRateBps     Int            @map("tax_rate_bps")
+  taxAmount      Int            @map("tax_amount")
+  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@index([bookingId])
+  @@index([seatId])
+  @@index([seatCategoryId])
+  @@map("booking_seats")
+}
+
+model BookingFoodLine {
+  id         String   @id @default(uuid(7)) @db.Uuid
+  bookingId  String   @map("booking_id") @db.Uuid
+  booking    Booking  @relation(fields: [bookingId], references: [id])
+  foodItemId String   @map("food_item_id") @db.Uuid
+  foodItem   FoodItem @relation(fields: [foodItemId], references: [id])
+  name       String
+  quantity   Int
+  unitPrice  Int      @map("unit_price")
+  slot       FoodSlot
+  taxRateBps Int      @map("tax_rate_bps")
+  taxAmount  Int      @map("tax_amount")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([bookingId])
+  @@index([foodItemId])
+  @@map("booking_food_lines")
+}
+
+model Ticket {
+  id               String       @id @default(uuid(7)) @db.Uuid
+  bookingId        String       @unique @map("booking_id") @db.Uuid
+  booking          Booking      @relation(fields: [bookingId], references: [id])
+  status           TicketStatus @default(ISSUED)
+  qrPayload        String       @map("qr_payload")
+  usedAt           DateTime?    @map("used_at") @db.Timestamptz(3)
+  usedByEmployeeId String?      @map("used_by_employee_id")
+  createdAt        DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@map("tickets")
+}
+
+model Payment {
+  id                   String              @id @default(uuid(7)) @db.Uuid
+  kind                 PaymentKind
+  bookingId            String?             @map("booking_id") @db.Uuid
+  booking              Booking?            @relation(fields: [bookingId], references: [id])
+  customerMembershipId String?             @map("customer_membership_id") @db.Uuid
+  customerMembership   CustomerMembership? @relation(fields: [customerMembershipId], references: [id])
+  customerId           String              @map("customer_id") @db.Uuid
+  customer             User                @relation(fields: [customerId], references: [id])
+  amount               Int
+  currency             String              @default("INR") @db.Char(3)
+  provider             String
+  providerRef          String              @map("provider_ref")
+  status               PaymentStatus       @default(INITIATED)
+  failureReason        String?             @map("failure_reason")
+  createdAt            DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt            DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+  refunds              Refund[]
+
+  @@unique([provider, providerRef])
+  @@index([bookingId])
+  @@index([customerMembershipId])
+  @@index([customerId])
+  @@map("payments")
+}
+
+model PaymentWebhookEvent {
+  id          String    @id @default(uuid(7)) @db.Uuid
+  provider    String
+  eventId     String    @map("event_id")
+  type        String
+  payload     Json
+  receivedAt  DateTime  @default(now()) @map("received_at") @db.Timestamptz(3)
+  processedAt DateTime? @map("processed_at") @db.Timestamptz(3)
+
+  @@unique([provider, eventId])
+  @@map("payment_webhook_events")
+}
+
+model Refund {
+  id              String         @id @default(uuid(7)) @db.Uuid
+  paymentId       String         @map("payment_id") @db.Uuid
+  payment         Payment        @relation(fields: [paymentId], references: [id])
+  refundRequestId String?        @map("refund_request_id") @db.Uuid
+  refundRequest   RefundRequest? @relation(fields: [refundRequestId], references: [id])
+  amount          Int
+  status          RefundStatus   @default(PENDING)
+  providerRef     String?        @map("provider_ref")
+  failureReason   String?        @map("failure_reason")
+  createdAt       DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@index([paymentId])
+  @@index([refundRequestId])
+  @@map("refunds")
+}
+
+model RefundRequest {
+  id             String              @id @default(uuid(7)) @db.Uuid
+  bookingId      String              @map("booking_id") @db.Uuid
+  booking        Booking             @relation(fields: [bookingId], references: [id])
+  requestedBy    String              @map("requested_by") @db.Uuid
+  requester      User                @relation("RefundRequestedBy", fields: [requestedBy], references: [id])
+  reason         String
+  status         RefundRequestStatus @default(REQUESTED)
+  approvedAmount Int?                @map("approved_amount")
+  decidedBy      String?             @map("decided_by") @db.Uuid
+  decider        User?               @relation("RefundDecidedBy", fields: [decidedBy], references: [id])
+  decisionNote   String?             @map("decision_note")
+  decidedAt      DateTime?           @map("decided_at") @db.Timestamptz(3)
+  createdAt      DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+  refunds        Refund[]
+
+  @@index([status, createdAt])
+  @@index([bookingId])
+  @@index([requestedBy])
+  @@index([decidedBy])
+  @@map("refund_requests")
+}
+
+model Invoice {
+  id                   String              @id @default(uuid(7)) @db.Uuid
+  number               String              @unique
+  bookingId            String?             @map("booking_id") @db.Uuid
+  booking              Booking?            @relation(fields: [bookingId], references: [id])
+  customerMembershipId String?             @map("customer_membership_id") @db.Uuid
+  customerMembership   CustomerMembership? @relation(fields: [customerMembershipId], references: [id])
+  issuedAt             DateTime            @default(now()) @map("issued_at") @db.Timestamptz(3)
+  createdAt            DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([bookingId])
+  @@index([customerMembershipId])
+  @@map("invoices")
+}
+
+model MembershipPlan {
+  id             String                   @id @default(uuid(7)) @db.Uuid
+  name           String
+  durationDays   Int                      @map("duration_days")
+  discountBps    Int                      @map("discount_bps")
+  benefits       String
+  suggestedPrice Int                      @map("suggested_price")
+  isActive       Boolean                  @default(true) @map("is_active")
+  createdAt      DateTime                 @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(3)
+  offers         CompanyMembershipOffer[]
+
+  @@map("membership_plans")
+}
+
+model CompanyMembershipOffer {
+  id          String               @id @default(uuid(7)) @db.Uuid
+  companyId   String               @map("company_id") @db.Uuid
+  company     Company              @relation(fields: [companyId], references: [id])
+  planId      String               @map("plan_id") @db.Uuid
+  plan        MembershipPlan       @relation(fields: [planId], references: [id])
+  price       Int
+  isActive    Boolean              @default(true) @map("is_active")
+  createdAt   DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
+  memberships CustomerMembership[]
+
+  @@unique([companyId, planId])
+  @@index([planId])
+  @@map("company_membership_offers")
+}
+
+model CustomerMembership {
+  id                      String                 @id @default(uuid(7)) @db.Uuid
+  customerId              String                 @map("customer_id") @db.Uuid
+  customer                User                   @relation(fields: [customerId], references: [id])
+  companyId               String                 @map("company_id") @db.Uuid
+  company                 Company                @relation(fields: [companyId], references: [id])
+  offerId                 String                 @map("offer_id") @db.Uuid
+  offer                   CompanyMembershipOffer @relation(fields: [offerId], references: [id])
+  status                  MembershipStatus       @default(PENDING)
+  startsAt                DateTime?              @map("starts_at") @db.Timestamptz(3)
+  endsAt                  DateTime?              @map("ends_at") @db.Timestamptz(3)
+  discountBps             Int                    @map("discount_bps")
+  pricePaid               Int                    @map("price_paid")
+  taxAmount               Int                    @map("tax_amount")
+  membershipCommissionBps Int                    @map("membership_commission_bps")
+  ledgerRecognisedAt      DateTime?              @map("ledger_recognised_at") @db.Timestamptz(3)
+  createdAt               DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt               DateTime               @updatedAt @map("updated_at") @db.Timestamptz(3)
+  bookings                Booking[]
+  payments                Payment[]
+  invoices                Invoice[]
+  ledgerEntries           LedgerEntry[]
+
+  @@index([companyId])
+  @@index([offerId])
+  @@map("customer_memberships")
+}
+
+model TaxRate {
+  id            String      @id @default(uuid(7)) @db.Uuid
+  itemType      TaxItemType @map("item_type")
+  rateBps       Int         @map("rate_bps")
+  effectiveFrom DateTime    @map("effective_from") @db.Timestamptz(3)
+  createdBy     String      @map("created_by") @db.Uuid
+  creator       User        @relation(fields: [createdBy], references: [id])
+  createdAt     DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@unique([itemType, effectiveFrom])
+  @@index([createdBy])
+  @@map("tax_rates")
+}
+
+model LedgerEntry {
+  id                   String              @id @default(uuid(7)) @db.Uuid
+  account              LedgerAccount
+  companyId            String              @map("company_id") @db.Uuid
+  company              Company             @relation(fields: [companyId], references: [id])
+  entryType            LedgerEntryType     @map("entry_type")
+  amount               Int
+  bookingId            String?             @map("booking_id") @db.Uuid
+  booking              Booking?            @relation(fields: [bookingId], references: [id])
+  customerMembershipId String?             @map("customer_membership_id") @db.Uuid
+  customerMembership   CustomerMembership? @relation(fields: [customerMembershipId], references: [id])
+  settlementId         String?             @map("settlement_id") @db.Uuid
+  settlement           Settlement?         @relation(fields: [settlementId], references: [id])
+  memo                 String?
+  createdBy            String?             @map("created_by") @db.Uuid
+  creator              User?               @relation(fields: [createdBy], references: [id])
+  createdAt            DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([createdAt])
+  // Hand-written migration makes this a covering index (INCLUDE amount); declared here so Prisma sees no drift.
+  @@index([companyId, account, amount], map: "ledger_entries_balance_idx")
+  @@index([bookingId])
+  @@index([customerMembershipId])
+  @@index([settlementId])
+  @@index([createdBy])
+  @@map("ledger_entries")
+}
+
+model Settlement {
+  id            String        @id @default(uuid(7)) @db.Uuid
+  companyId     String        @map("company_id") @db.Uuid
+  company       Company       @relation(fields: [companyId], references: [id])
+  amount        Int
+  periodStart   DateTime      @map("period_start") @db.Date
+  periodEnd     DateTime      @map("period_end") @db.Date
+  bankReference String        @unique @map("bank_reference")
+  paidAt        DateTime      @map("paid_at") @db.Timestamptz(3)
+  recordedBy    String        @map("recorded_by") @db.Uuid
+  recorder      User          @relation(fields: [recordedBy], references: [id])
+  note          String?
+  createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  ledgerEntries LedgerEntry[]
+
+  @@index([companyId])
+  @@index([recordedBy])
+  @@map("settlements")
+}
+
+model SupportTicket {
+  id                String                 @id @default(uuid(7)) @db.Uuid
+  type              SupportTicketType
+  companyId         String                 @map("company_id") @db.Uuid
+  company           Company                @relation(fields: [companyId], references: [id])
+  theaterId         String?                @map("theater_id") @db.Uuid
+  theater           Theater?               @relation(fields: [theaterId], references: [id])
+  bookingId         String?                @map("booking_id") @db.Uuid
+  booking           Booking?               @relation(fields: [bookingId], references: [id])
+  raisedBy          String                 @map("raised_by") @db.Uuid
+  raiser            User                   @relation("TicketRaisedBy", fields: [raisedBy], references: [id])
+  assignedTo        String?                @map("assigned_to") @db.Uuid
+  assignee          User?                  @relation("TicketAssignedTo", fields: [assignedTo], references: [id])
+  status            SupportTicketStatus    @default(OPEN)
+  subject           String
+  description       String
+  resolvedAt        DateTime?              @map("resolved_at") @db.Timestamptz(3)
+  createdAt         DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime               @updatedAt @map("updated_at") @db.Timestamptz(3)
+  messages          SupportTicketMessage[]
+  workerAssignments WorkerAssignment[]
+
+  @@index([companyId, type, status])
+  @@index([theaterId, status])
+  @@index([raisedBy])
+  @@index([assignedTo])
+  @@index([bookingId])
+  @@map("support_tickets")
+}
+
+model SupportTicketMessage {
+  id        String        @id @default(uuid(7)) @db.Uuid
+  ticketId  String        @map("ticket_id") @db.Uuid
+  ticket    SupportTicket @relation(fields: [ticketId], references: [id])
+  authorId  String        @map("author_id") @db.Uuid
+  author    User          @relation(fields: [authorId], references: [id])
+  body      String
+  createdAt DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([ticketId])
+  @@index([authorId])
+  @@map("support_ticket_messages")
+}
+
+model WorkerAssignment {
+  id              String         @id @default(uuid(7)) @db.Uuid
+  companyId       String         @map("company_id") @db.Uuid
+  company         Company        @relation(fields: [companyId], references: [id])
+  theaterId       String         @map("theater_id") @db.Uuid
+  theater         Theater        @relation(fields: [theaterId], references: [id])
+  employeeId      String         @map("employee_id")
+  role            WorkerRole
+  assignedAt      DateTime       @default(now()) @map("assigned_at") @db.Timestamptz(3)
+  releasedAt      DateTime?      @map("released_at") @db.Timestamptz(3)
+  actionedBy      String         @map("actioned_by") @db.Uuid
+  actioner        User           @relation(fields: [actionedBy], references: [id])
+  supportTicketId String?        @map("support_ticket_id") @db.Uuid
+  supportTicket   SupportTicket? @relation(fields: [supportTicketId], references: [id])
+  createdAt       DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@index([companyId])
+  @@index([theaterId])
+  @@index([actionedBy])
+  @@index([supportTicketId])
+  @@map("worker_assignments")
+}
+
+model AuditLog {
+  id            String   @id @default(uuid(7)) @db.Uuid
+  occurredAt    DateTime @default(now()) @map("occurred_at") @db.Timestamptz(3)
+  actorId       String?  @map("actor_id") @db.Uuid
+  actor         User?    @relation(fields: [actorId], references: [id])
+  actorKind     String   @map("actor_kind")
+  companyId     String?  @map("company_id") @db.Uuid
+  module        String
+  action        String
+  entityType    String   @map("entity_type")
+  entityId      String   @map("entity_id")
+  before        Json?
+  after         Json?
+  correlationId String   @map("correlation_id")
+  ip            String?  @db.Inet
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([module, occurredAt(sort: Desc)])
+  @@index([companyId, occurredAt(sort: Desc)])
+  @@index([entityType, entityId])
+  @@index([actorId])
+  @@map("audit_logs")
+}
+
+model OutboxEvent {
+  id          String    @id @default(uuid(7)) @db.Uuid
+  type        String
+  aggregateId String    @map("aggregate_id")
+  payload     Json
+  availableAt DateTime  @default(now()) @map("available_at") @db.Timestamptz(3)
+  processedAt DateTime? @map("processed_at") @db.Timestamptz(3)
+  attempts    Int       @default(0)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@map("outbox_events")
+}
+
+model IdempotencyKey {
+  key            String
+  userId         String   @map("user_id") @db.Uuid
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  requestHash    String   @map("request_hash")
+  responseStatus Int?     @map("response_status")
+  responseBody   Json?    @map("response_body")
+  expiresAt      DateTime @map("expires_at") @db.Timestamptz(3)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@id([key, userId])
+  @@index([expiresAt])
+  @@map("idempotency_keys")
 }
