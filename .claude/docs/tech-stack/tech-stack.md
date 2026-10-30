@@ -16,7 +16,7 @@ All choices below are final for v1; anything marked "later" is added in the phas
 | Config | `@nestjs/config` + Zod env schema | App fails fast on missing or invalid env |
 | Auth | `@nestjs/jwt`, `@nestjs/passport`, `passport-jwt`, `argon2` | Access + refresh tokens, email/password only |
 | Authorization | Nest Guards + custom `@Roles()` | Ownership checks in services; CASL only if rules grow |
-| Cache / locks | Redis 7 (`ioredis`) | Seat holds, rate limiting, selective caching |
+| Cache / rate limiting | Redis 7 (`ioredis`) | Rate limiting, permission cache, selective read caching. Seat holds live in Postgres (ADR-002) |
 | Queues / workers / cron | BullMQ via `@nestjs/bullmq` | Separate worker process; Bull Board dashboard |
 | Email | `nodemailer` behind a `MailService` interface | Mailpit locally |
 | Request context | `nestjs-cls` | Correlation ID available everywhere |
