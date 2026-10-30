@@ -60,3 +60,8 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
 # local mkcert certificates (generate with `pnpm certs`)
 /certs
+
+/src/generated/prisma
+
+# generated Prisma client
+/src/generated

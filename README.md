@@ -45,6 +45,23 @@ $ echo "127.0.0.1 bookmyticket.test" | sudo tee -a /etc/hosts
 
 The `certs/` folder is gitignored: mkcert certificates are only trusted on the machine that created them, so each developer generates their own.
 
+## Local infrastructure
+
+```bash
+$ cp .env.example .env     # then adjust values if needed
+$ pnpm infra:up            # Postgres (5433), Redis (6379), Mailpit (SMTP 1025, UI http://localhost:8025)
+$ pnpm prisma:generate     # generate the Prisma client into src/generated
+```
+
+| URL | What |
+| --- | --- |
+| `https://bookmyticket.test:3000/docs` | Swagger UI (`/docs-json` for the spec) |
+| `https://bookmyticket.test:3000/health` | Postgres + Redis health |
+| `https://bookmyticket.test:3000/queues` | Bull Board |
+
+The worker process (BullMQ processors, cron) runs separately: `pnpm start:worker`.
+The app validates its env with Zod at boot and fails fast if anything is missing.
+
 ## Compile and run the project
 
 ```bash
