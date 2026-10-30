@@ -26,6 +26,7 @@
     "format:check": "prettier --check \"src/**/*.ts\" \"test/**/*.ts\"",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
+    "prisma:migrate:test": "DOTENV_CONFIG_PATH=.env.test prisma migrate deploy",
     "infra:up": "docker compose up -d",
     "infra:down": "docker compose down",
     "prepare": "husky"

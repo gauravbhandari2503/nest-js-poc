@@ -26,6 +26,13 @@ export const envSchema = z.object({
   SMTP_USER: z.string().optional(),
   SMTP_PASSWORD: z.string().optional(),
   MAIL_FROM: z.string().min(1),
+
+  // Read by prisma/seed.ts only; the app itself boots without them.
+  SEED_ADMIN_EMAIL: z.email().optional(),
+  SEED_ADMIN_PASSWORD: z.string().min(12).optional(),
+
+  BOOKING_HOLD_MINUTES: z.coerce.number().int().positive().default(10),
+  SHOW_CLEANING_BUFFER_MINUTES: z.coerce.number().int().min(0).default(15),
 });
 
 export type Env = z.infer<typeof envSchema>;
