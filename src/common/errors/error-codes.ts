@@ -1,0 +1,56 @@
+import { HttpStatus } from '@nestjs/common';
+
+/** Stable error codes. Clients switch on these; the catalogue is in api-design.md. */
+export const ErrorCode = {
+  ValidationFailed: 'VALIDATION_FAILED',
+  Unauthenticated: 'UNAUTHENTICATED',
+  TokenExpired: 'TOKEN_EXPIRED',
+  Forbidden: 'FORBIDDEN',
+  NotFound: 'NOT_FOUND',
+  CompanyContextRequired: 'COMPANY_CONTEXT_REQUIRED',
+  RateLimited: 'RATE_LIMITED',
+  InvalidStateTransition: 'INVALID_STATE_TRANSITION',
+  SeatUnavailable: 'SEAT_UNAVAILABLE',
+  SeatLimitExceeded: 'SEAT_LIMIT_EXCEEDED',
+  OpenCheckoutExists: 'OPEN_CHECKOUT_EXISTS',
+  BookingExpired: 'BOOKING_EXPIRED',
+  ShowNotBookable: 'SHOW_NOT_BOOKABLE',
+  ShowOverlap: 'SHOW_OVERLAP',
+  RefundNotAllowed: 'REFUND_NOT_ALLOWED',
+  RefundAmountExceedsPaid: 'REFUND_AMOUNT_EXCEEDS_PAID',
+  TicketAlreadyUsed: 'TICKET_ALREADY_USED',
+  TicketInvalid: 'TICKET_INVALID',
+  MembershipAlreadyActive: 'MEMBERSHIP_ALREADY_ACTIVE',
+  SettlementExceedsBalance: 'SETTLEMENT_EXCEEDS_BALANCE',
+  PaymentProviderUnavailable: 'PAYMENT_PROVIDER_UNAVAILABLE',
+  IdempotencyKeyReused: 'IDEMPOTENCY_KEY_REUSED',
+  Internal: 'INTERNAL',
+} as const;
+
+export type ErrorCodeValue = (typeof ErrorCode)[keyof typeof ErrorCode];
+
+export const ERROR_STATUS: Record<ErrorCodeValue, number> = {
+  VALIDATION_FAILED: HttpStatus.UNPROCESSABLE_ENTITY,
+  UNAUTHENTICATED: HttpStatus.UNAUTHORIZED,
+  TOKEN_EXPIRED: HttpStatus.UNAUTHORIZED,
+  FORBIDDEN: HttpStatus.FORBIDDEN,
+  NOT_FOUND: HttpStatus.NOT_FOUND,
+  COMPANY_CONTEXT_REQUIRED: HttpStatus.BAD_REQUEST,
+  RATE_LIMITED: HttpStatus.TOO_MANY_REQUESTS,
+  INVALID_STATE_TRANSITION: HttpStatus.CONFLICT,
+  SEAT_UNAVAILABLE: HttpStatus.CONFLICT,
+  SEAT_LIMIT_EXCEEDED: HttpStatus.UNPROCESSABLE_ENTITY,
+  OPEN_CHECKOUT_EXISTS: HttpStatus.CONFLICT,
+  BOOKING_EXPIRED: HttpStatus.CONFLICT,
+  SHOW_NOT_BOOKABLE: HttpStatus.CONFLICT,
+  SHOW_OVERLAP: HttpStatus.CONFLICT,
+  REFUND_NOT_ALLOWED: HttpStatus.CONFLICT,
+  REFUND_AMOUNT_EXCEEDS_PAID: HttpStatus.UNPROCESSABLE_ENTITY,
+  TICKET_ALREADY_USED: HttpStatus.CONFLICT,
+  TICKET_INVALID: HttpStatus.UNPROCESSABLE_ENTITY,
+  MEMBERSHIP_ALREADY_ACTIVE: HttpStatus.CONFLICT,
+  SETTLEMENT_EXCEEDS_BALANCE: HttpStatus.UNPROCESSABLE_ENTITY,
+  PAYMENT_PROVIDER_UNAVAILABLE: HttpStatus.BAD_GATEWAY,
+  IDEMPOTENCY_KEY_REUSED: HttpStatus.UNPROCESSABLE_ENTITY,
+  INTERNAL: HttpStatus.INTERNAL_SERVER_ERROR,
+};

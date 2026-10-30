@@ -2,7 +2,7 @@ import { ExpressAdapter } from '@bull-board/express';
 import { BullBoardModule } from '@bull-board/nestjs';
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { createObserveModule } from '@nestjs/observe';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis';
@@ -11,6 +11,9 @@ import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { PermissionsSyncService } from './common/auth/permissions-sync.service.js';
 import type { Env } from './config/env.js';
+import { ProblemDetailsFilter } from './common/errors/problem-details.filter.js';
+import { PermissionsService } from './common/auth/permissions.service.js';
+import { TenancyModule } from './common/tenancy/tenancy.module.js';
 import { CoreModule } from './core.module.js';
 import { HealthModule } from './health/health.module.js';
 import { REDIS } from './redis/redis.module.js';
@@ -27,6 +30,7 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
       serviceId: 'book-my-ticket',
     }),
     CoreModule,
+    TenancyModule,
     ThrottlerModule.forRootAsync({
       inject: [ConfigService, REDIS],
       useFactory: (config: ConfigService<Env, true>, redis: Redis) => ({
@@ -46,6 +50,8 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
   providers: [
     AppService,
     PermissionsSyncService,
+    PermissionsService,
+    { provide: APP_FILTER, useClass: ProblemDetailsFilter },
     { provide: APP_GUARD, useClass: ThrottlerGuard },
   ],
 })

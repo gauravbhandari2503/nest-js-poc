@@ -15,7 +15,7 @@ The OpenAPI document is **generated from the controllers and DTOs**, not hand-wr
 | IDs | UUID strings |
 | Methods | `GET` read · `POST` create/action · `PATCH` partial update · `PUT` only for full replace of a set (seat prices) · `DELETE` remove/soft-delete |
 | Status codes | `200` ok · `201` created (+ `Location`) · `202` accepted (async) · `204` no body · `400` malformed · `401` unauthenticated · `403` authenticated but missing permission · `404` not found **or not yours** · `409` conflict/state · `422` validation · `429` throttled · `5xx` ours |
-| Tenant | Staff never pass a company id; it comes from the token. Super admin passes `companyId` where relevant under `/platform` |
+| Tenant | Staff never pass a company id; it comes from the token. The super admin can call any `/v1/admin/*` route by sending `X-Company-Id: <company uuid>` (see 4.4); under `/platform` they pass `companyId` in the path where relevant |
 | Idempotency | `POST /client/bookings`, `POST /client/memberships`, `POST /admin/settlements` require an `Idempotency-Key` header; replays return the original response |
 | Correlation | Accept `x-correlation-id`, always return it |
 | Responses | DTO classes only — never raw Prisma rows (avoids leaking columns such as `passwordHash`) |
@@ -69,7 +69,8 @@ The clients switch on `code`, which is stable and documented; `detail` is for hu
 | --- | --- | --- |
 | `VALIDATION_FAILED` | 422 | DTO validation |
 | `UNAUTHENTICATED` / `TOKEN_EXPIRED` | 401 | Missing, invalid or expired access token |
-| `FORBIDDEN` | 403 | Missing permission |
+| `FORBIDDEN` | 403 | Missing permission, or the route is not available to the caller's account type |
+| `COMPANY_CONTEXT_REQUIRED` | 400 | Super admin called a company route without a valid `X-Company-Id` |
 | `NOT_FOUND` | 404 | Missing or outside the caller's tenant |
 | `RATE_LIMITED` | 429 | Throttled (`Retry-After` set) |
 | `INVALID_STATE_TRANSITION` | 409 | Action not allowed in the current state |
@@ -93,9 +94,9 @@ The clients switch on `code`, which is stable and documented; `detail` is for hu
 
 | | |
 | --- | --- |
-| Access token | `Authorization: Bearer <JWT>`, 15 minutes. Claims: `sub`, `kind`, `companyId` (staff) |
+| Access token | `Authorization: Bearer <JWT>`, 15 minutes. Claims: `sub`, `kind`, `companyId` (staff only; the super admin has none) |
 | Refresh | `POST /v1/auth/refresh` using the `HttpOnly` refresh cookie; rotates on every use |
-| Permissions | Not in the token. `GET /v1/admin/me` returns the permission list so the portal can hide menus; the server still checks every call |
+| Permissions | Not in the token. `GET /v1/admin/me` returns the permission list so the portal can hide menus (the frontend works with permission codes only, never role names); the server still checks every call. **For a super admin the list is every permission code**, because they may do everything on company routes |
 | Throttling | Global default; `/auth/*` and `POST /client/bookings` stricter; per-IP and per-account |
 
 ## 4. Endpoint catalogue
@@ -146,6 +147,16 @@ The clients switch on `code`, which is stable and documented; `detail` is for hu
 | POST | `/support-tickets` · GET `/support-tickets`, `/{id}` · POST `/{id}/messages` | Help tickets |
 
 ### 4.4 Admin (`/v1/admin`, company staff; tenant from token)
+
+**Who can call these routes**
+
+| Caller | Company comes from | Permissions |
+| --- | --- | --- |
+| Company staff | Their token. An `X-Company-Id` header is ignored | Their role's permissions |
+| Super admin | The **`X-Company-Id`** header, required on every call: missing or not a uuid → `400 COMPANY_CONTEXT_REQUIRED`, unknown company → `404 NOT_FOUND` | All of them; `GET /me` returns every permission code. Theater scope (`staff_theaters`) does not apply |
+| Customer | n/a | `403 FORBIDDEN` |
+
+A suspended company can still be acted on by the super admin. Every write by a super admin is audit-logged with the actor and the company they acted on. Money and ledger records stay append-only for everyone.
 
 | Area | Endpoints | Permission |
 | --- | --- | --- |
