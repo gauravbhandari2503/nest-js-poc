@@ -9,6 +9,7 @@ import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis'
 import type { Redis } from 'ioredis';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
+import { PermissionsSyncService } from './common/auth/permissions-sync.service.js';
 import type { Env } from './config/env.js';
 import { CoreModule } from './core.module.js';
 import { HealthModule } from './health/health.module.js';
@@ -42,6 +43,10 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
     HealthModule,
   ],
   controllers: [AppController],
-  providers: [AppService, { provide: APP_GUARD, useClass: ThrottlerGuard }],
+  providers: [
+    AppService,
+    PermissionsSyncService,
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
+  ],
 })
 export class AppModule {}

@@ -52,7 +52,9 @@ $ cp .env.example .env     # then adjust values if needed
 $ pnpm infra:up            # Postgres (5433), Redis (6379), Mailpit (SMTP 1025, UI http://localhost:8025)
 $ pnpm prisma:generate     # generate the Prisma client into src/generated
 $ pnpm prisma:migrate      # create the schema in the dev database
+$ pnpm prisma:seed         # permissions, roles, super admin, tax rates, states and cities (safe to run again)
 $ pnpm prisma:migrate:test # same for the test database (book_my_ticket_test)
+$ pnpm prisma:seed:test    # seed the test database too
 ```
 
 Then start the app and, optionally, the database UI (each in its own terminal):
@@ -71,7 +73,7 @@ $ pnpm prisma:studio       # Prisma Studio, the database UI at http://localhost:
 | `https://bookmyticket.test:3000/queues` | Bull Board |
 
 The worker process (BullMQ processors, cron) runs separately: `pnpm start:worker`.
-The app validates its env with Zod at boot and fails fast if anything is missing.
+The app validates its env with Zod at boot and fails fast if anything is missing. It also refuses to start when the `permissions` table does not match the code: run the seed.
 
 ## Database
 

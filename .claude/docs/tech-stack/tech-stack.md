@@ -11,7 +11,7 @@ All choices below are final for v1; anything marked "later" is added in the phas
 | Runtime / language | Node.js 22 LTS, TypeScript (strict, ESM / `nodenext`) | pnpm as package manager |
 | Framework | NestJS (REST) | Separate repo from the frontend |
 | Database | PostgreSQL 17 | Transactions and row locking for seat booking |
-| ORM | Prisma 7 (`prisma-client` generator, `@prisma/adapter-pg`) | Client generated into `src/generated` (gitignored); raw SQL via `$queryRaw` only where locking needs it |
+| ORM | Prisma 7 (`prisma-client` generator, `@prisma/adapter-pg`) | Client generated into `src/generated` (gitignored); raw SQL via `$queryRaw` only where locking needs it. Seed: `pnpm prisma db seed` (runs `prisma/seed.ts` through `tsx`) |
 | Validation | `class-validator` + `class-transformer` | Global `ValidationPipe`, `whitelist: true` |
 | Config | `@nestjs/config` + Zod env schema | App fails fast on missing or invalid env |
 | Auth | `@nestjs/jwt`, `@nestjs/passport`, `passport-jwt`, `argon2` | Access + refresh tokens, email/password only |
@@ -26,7 +26,7 @@ All choices below are final for v1; anything marked "later" is added in the phas
 | Health | `@nestjs/terminus` | `GET /health` checks Postgres and Redis |
 | File storage (later) | MinIO, S3-compatible | Movie posters |
 | Payments (later) | Stripe or Razorpay test mode | Webhooks + idempotency |
-| Testing | Vitest, `@nestjs/testing`, `supertest`, `vitest-mock-extended` | Separate test database (`book_my_ticket_test`) |
+| Testing | Vitest, `@nestjs/testing`, `supertest`, `vitest-mock-extended` | Separate test database (`book_my_ticket_test`), migrated with `pnpm prisma:migrate:test` and seeded with `pnpm prisma:seed:test` |
 | Code quality | oxlint, Prettier, Husky + lint-staged | Lint and format on commit |
 | CI | GitHub Actions | Lint, format check, build, test on every push |
 | Observability | `@nestjs/observe` | Tracing and metrics; app keys still placeholders |
