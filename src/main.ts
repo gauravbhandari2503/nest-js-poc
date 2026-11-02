@@ -7,6 +7,7 @@ import helmet from 'helmet';
 import { Logger } from 'nestjs-pino';
 import { ValidationPipe } from '@nestjs/common';
 import { AppModule, ObserveInstrument } from './app.module.js';
+import { COMPANY_SECURITY } from './common/swagger/surfaces.js';
 import { validationExceptionFactory } from './common/errors/validation.js';
 import type { Env } from './config/env.js';
 
@@ -47,6 +48,20 @@ async function bootstrap() {
     .setTitle('Movie Booking API')
     .setVersion('1.0')
     .addBearerAuth()
+    // Super admins acting on a company send this on every /admin call (ADR-010).
+    .addApiKey(
+      { type: 'apiKey', name: 'X-Company-Id', in: 'header' },
+      COMPANY_SECURITY,
+    )
+    .addTag('public', 'No login: browse cities, movies, shows')
+    .addTag('auth', 'Login, refresh, password setup and reset')
+    .addTag('client', 'Customer app: bookings, memberships, refunds')
+    .addTag(
+      'admin',
+      'Company portal: venues, shows, staff. Super admin may act on a company with X-Company-Id',
+    )
+    .addTag('platform', 'Super admin: companies, catalog, tax, settlements')
+    .addTag('webhooks', 'Payment gateway callbacks')
     .build();
   SwaggerModule.setup(
     'docs',

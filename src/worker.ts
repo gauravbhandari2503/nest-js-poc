@@ -1,13 +1,13 @@
 import { NestFactory } from '@nestjs/core';
 import { Logger } from 'nestjs-pino';
-import { CoreModule } from './core.module.js';
+import { WorkerModule } from './worker.module.js';
 
 /**
- * Separate process for BullMQ processors and cron jobs.
+ * Separate process for BullMQ processors, cron jobs and the outbox dispatcher.
  * Register processor modules here as queues are added.
  */
 async function bootstrap() {
-  const app = await NestFactory.createApplicationContext(CoreModule, {
+  const app = await NestFactory.createApplicationContext(WorkerModule, {
     bufferLogs: true,
   });
   app.useLogger(app.get(Logger));

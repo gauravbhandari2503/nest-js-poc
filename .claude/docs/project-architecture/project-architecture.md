@@ -119,7 +119,7 @@ Cross-module communication, in order of preference:
 
 1. **Call an exported service** of a lower layer (`booking` → `PricingService`).
 2. **Publish an outbox event** when a lower or same-layer module must react (`payments` emits `payment.succeeded`; `booking` consumes it). This is what keeps `payments` from depending on `booking`.
-3. Never import another module's internals, repositories or DTOs; only what its `index.ts` exports. A lint rule (`no-restricted-imports` on `modules/*/internal`) enforces it.
+3. Never import another module's internals, repositories or DTOs; only what its `index.ts` exports. An architecture test (`test/architecture`, runs with `pnpm test`) enforces it.
 
 No `forwardRef()`. A circular dependency means a boundary is wrong — use an event instead.
 

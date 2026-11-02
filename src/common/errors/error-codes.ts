@@ -24,6 +24,7 @@ export const ErrorCode = {
   SettlementExceedsBalance: 'SETTLEMENT_EXCEEDS_BALANCE',
   PaymentProviderUnavailable: 'PAYMENT_PROVIDER_UNAVAILABLE',
   IdempotencyKeyReused: 'IDEMPOTENCY_KEY_REUSED',
+  IdempotencyKeyInProgress: 'IDEMPOTENCY_KEY_IN_PROGRESS',
   Internal: 'INTERNAL',
 } as const;
 
@@ -52,5 +53,6 @@ export const ERROR_STATUS: Record<ErrorCodeValue, number> = {
   SETTLEMENT_EXCEEDS_BALANCE: HttpStatus.UNPROCESSABLE_ENTITY,
   PAYMENT_PROVIDER_UNAVAILABLE: HttpStatus.BAD_GATEWAY,
   IDEMPOTENCY_KEY_REUSED: HttpStatus.UNPROCESSABLE_ENTITY,
+  IDEMPOTENCY_KEY_IN_PROGRESS: HttpStatus.CONFLICT,
   INTERNAL: HttpStatus.INTERNAL_SERVER_ERROR,
 };
