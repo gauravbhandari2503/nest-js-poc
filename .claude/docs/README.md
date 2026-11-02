@@ -14,6 +14,7 @@ Status: **design phase. No feature code until these docs are approved.**
 | 5 | [Database design](database-design/database-design.md) | Tables, constraints, indexes, critical queries, migration rules | Developers, reviewers |
 | 6 | [API design](api-design/api-design.md) | REST conventions, error catalogue, endpoint catalogue | Developers, frontend |
 | 7 | [Project foundation setup](project-foundation-setup/README.md) | How the foundation was built, step by step, for starting a new project | New developers, anyone bootstrapping a project |
+| 8 | [Build plan](project-architecture/build-plan.md) | The order the business modules are built in, with exit checks | Everyone |
 
 ## Decisions
 
