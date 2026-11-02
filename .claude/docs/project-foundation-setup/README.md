@@ -9,5 +9,6 @@ A step-by-step record of how the project foundation was built, in the order it w
 | 3 | Seed: permissions, roles, super admin, tax rates, states and cities | [03-seed.md](03-seed.md) |
 | 4 | Errors (RFC 7807), access decorators and guards, tenancy (incl. super admin acting on a company) | [04-errors-auth-tenancy.md](04-errors-auth-tenancy.md) |
 | 5 | Shared building blocks: money, pagination, outbox, idempotency, Swagger surfaces, architecture rules | [05-shared-building-blocks.md](05-shared-building-blocks.md) |
+| 6 | Tooling and CI: checks, GitHub Actions, verifying CI locally | [06-tooling-and-ci.md](06-tooling-and-ci.md) |
 
-Planned next: 6 Tooling and CI (GitHub Actions, e2e fixes), 5 Tooling and CI. Tracking lives in the `todo` file at the repo root.
+The foundation is complete. Next is milestone 1 (login and identity), which is feature work and is documented in the project architecture delivery plan.

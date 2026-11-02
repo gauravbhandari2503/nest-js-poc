@@ -18,6 +18,7 @@
     "start:worker": "nest start --entryFile worker --watch",
     "start:worker:prod": "node dist/worker",
     "lint": "oxlint src/ test/",
+    "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:cov": "vitest run --coverage",

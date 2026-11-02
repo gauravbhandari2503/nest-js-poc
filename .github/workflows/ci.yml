@@ -1,10 +1,18 @@
 name: CI
 
-on: [push, pull_request]
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   check:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     services:
       postgres:
         image: postgres:17
@@ -12,23 +20,14 @@ jobs:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: book_my_ticket_test
-        ports: ['5432:5432']
+        # 5433 on the runner, to match DATABASE_URL in .env.test (the same port as local dev).
+        ports: ['5433:5432']
         options: >-
           --health-cmd "pg_isready -U postgres" --health-interval 5s
           --health-timeout 3s --health-retries 10
       redis:
         image: redis:7
         ports: ['6379:6379']
-    env:
-      NODE_ENV: test
-      FRONTEND_ORIGIN: http://localhost:5173
-      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/book_my_ticket_test
-      REDIS_URL: redis://localhost:6379
-      JWT_ACCESS_SECRET: ci-access-secret-ci-access-secret-ci
-      JWT_REFRESH_SECRET: ci-refresh-secret-ci-refresh-secret-c
-      SMTP_HOST: localhost
-      SMTP_PORT: '1025'
-      MAIL_FROM: no-reply@bookmyticket.test
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -37,8 +36,17 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm prisma generate
+      - run: pnpm prisma:generate
       - run: pnpm lint
       - run: pnpm format:check
+      - run: pnpm typecheck
       - run: pnpm build
       - run: pnpm test
+
+      # Integration tests need a real database. Everything below reads .env.test.
+      - name: Migrate and seed the test database
+        run: |
+          pnpm prisma:migrate:test
+          pnpm prisma:seed:test
+      - name: Integration and e2e tests
+        run: pnpm test:e2e

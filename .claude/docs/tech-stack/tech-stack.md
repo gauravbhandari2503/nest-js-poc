@@ -28,7 +28,7 @@ All choices below are final for v1; anything marked "later" is added in the phas
 | Payments (later) | Stripe or Razorpay test mode | Webhooks + idempotency |
 | Testing | Vitest, `@nestjs/testing`, `supertest`, `vitest-mock-extended` | Separate test database (`book_my_ticket_test`), migrated with `pnpm prisma:migrate:test` and seeded with `pnpm prisma:seed:test` |
 | Code quality | oxlint, Prettier, Husky + lint-staged | Lint and format on commit |
-| CI | GitHub Actions | Lint, format check, build, test on every push |
+| CI | GitHub Actions | Lint, format check, typecheck, build, unit tests, then migrate + seed the test DB and run integration/e2e tests (Postgres and Redis as service containers) |
 | Observability | `@nestjs/observe` | Tracing and metrics; app keys still placeholders |
 | Local HTTPS | mkcert, served directly by Nest | `pnpm certs` generates `./certs` (gitignored); `https://bookmyticket.test:3000` |
 | Local infrastructure | Docker Compose | Postgres 17 (host port 5433), Redis 7, Mailpit |
