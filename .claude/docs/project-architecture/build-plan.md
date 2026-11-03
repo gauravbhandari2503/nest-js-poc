@@ -6,7 +6,7 @@ The foundation (config, database, seed, errors, tenancy, outbox, money, paginati
 
 The same loop each time, so a module is only "done" when all of it is true:
 
-1. **Module folder** with the standard shape (`controllers/<surface>/`, `services/`, `queries/`, `domain/`, `dto/`, `index.ts`), see project-architecture 4.3.
+1. **Module folder** with the standard shape (`controllers/<surface>-*.controller.ts`, `services/`, `queries/`, `domain/`, `dto/`, `index.ts`, tests in `<folder>/__tests__/`), see project-architecture 4.3.
 2. **Services** hold the rules and take `companyId` as the first parameter; **controllers** only call them. Every controller carries its surface decorator (`@AdminApi()` etc.).
 3. **Errors** are `DomainError`s with codes from the catalogue; add a code if one is missing.
 4. **Tests**: unit tests for rules; an e2e test per endpoint group; for every admin endpoint a **cross-tenant test** (company A's token gets 404 for company B's id).
@@ -19,7 +19,7 @@ Layer order matters: a module may import only modules in lower layers (identity/
 
 | # | Module(s) | What it delivers | Depends on | Exit check |
 | --- | --- | --- | --- | --- |
-| **1** | **identity + rbac (auth)** | `POST /auth/login`, `/refresh`, `/logout`, `/register` (customer); `JwtAuthGuard` registered globally with the tenant and permission guards switched on; `GET /admin/me` (permission list, all codes for a super admin); password set/forgot/reset by emailed token (Mailpit); Redis cache for permissions (60 s) | foundation | Log in as the **seeded super admin**; staff token reaches `/admin`, customer token does not; permission matrix test; refresh-token reuse revokes the whole family; staff with `X-Company-Id` still sees only their own company |
+| **1** | **identity + rbac (auth)** ✅ | `POST /auth/login`, `/refresh`, `/logout`, `/register` (customer); `JwtAuthGuard` registered globally with the tenant and permission guards switched on; `GET /admin/me` (permission list, all codes for a super admin); password set/forgot/reset by emailed token (Mailpit); Redis cache for permissions (60 s) | foundation | Log in as the **seeded super admin**; staff token reaches `/admin`, customer token does not; permission matrix test; refresh-token reuse revokes the whole family; staff with `X-Company-Id` still sees only their own company |
 | **2** | **companies + staff + audit** | Super admin onboards a company (company + owner user + setup email), commission rates, suspend/activate, registration fee; owner invites staff, accepts invitation, changes role/theaters, deactivates; **audit log** writing (actor, company, `actingAs`) | 1 | Onboard → email in Mailpit → owner sets password and logs in; invite → accept → staff can act; every platform and admin write appears in the audit log |
 | **3** | **catalog + venues** | Cities and movies (super admin) plus public browse; theaters, screens, seat categories, seat layout (`PUT .../seats`) | 1, 2 | Tenant isolation tests on every venue endpoint; composite FK rejects cross-company data through the API |
 | **4** | **pricing + shows** | Tax rate history; the pure price calculator; shows with prices per seat category; the overlap rule surfaced as `SHOW_OVERLAP`; show cancel (state only) | 3 | Overlap rejected by the database and mapped to the error code; back-to-back allowed; calculator property tests (total equals sum of lines, discount never exceeds list) |
@@ -30,6 +30,15 @@ Layer order matters: a module may import only modules in lower layers (identity/
 | **8** | **ledger + settlements + reports** | Recognition job at show end, payable balances, settlements (locked per company), adjustments, company sales report, super admin dashboard | 5b, 7 | Ledger idempotency; balance reconciles with bookings; no double payout under concurrency |
 | **9** | **support** | Help, maintenance and platform-request tickets, routing, worker assignment | 2, 3 | Routing tests per ticket type |
 | **10** | **hardening** | k6 load test on one hot show, `EXPLAIN` review of the critical queries, security pass, docs polish | all | Targets in system-design section 1 met |
+
+### Milestone 1 as built
+
+- Code: `src/modules/identity` (register, login, refresh, logout, password setup/forgot/reset/change, token rotation) and `src/modules/rbac` (`GET /v1/admin/me`). The guards and permission cache are in `src/common/auth`.
+- Access token: JWT, 15 min, claims `sub`, `kind`, `companyId`. Refresh token: opaque, HMAC-hashed in `refresh_tokens`, `HttpOnly; Secure; SameSite=Lax` cookie on path `/v1/auth`, rotated per use; reuse revokes the family. A refresh re-reads the account, so deactivated staff, suspended companies and disabled users are cut off at the next refresh.
+- Password links: `SET_PASSWORD` 72 h and `RESET_PASSWORD` 1 h, single use. `PasswordService.issueToken` is exported for milestone 2 (onboarding and invitations). `forgot` always answers 202 so emails cannot be probed.
+- `/v1/auth/*` is throttled at 10 requests a minute (5 for the password routes), per IP.
+- Decisions taken for the two open questions: customer registration has **no** email verification yet, and `POST /v1/auth/password/change` exists so the seeded admin can replace the seed password.
+- e2e tests use `unplugin-swc` (decorator metadata for Nest DI) and a probe controller to test the permission matrix.
 
 ## Why this order
 
@@ -50,6 +59,6 @@ Layer order matters: a module may import only modules in lower layers (identity/
 
 | When | Decision |
 | --- | --- |
-| 1 | Customer registration: email verification now, or later? (the design assumes email/password only, no verification) |
-| 2 | Platform admin changing the seeded password: a change-password endpoint in milestone 1, since the seed never resets an existing admin's password |
+| 1 | ~~Customer registration: email verification~~ Decided: later (design assumes none) |
+| 1 | ~~Changing the seeded admin password~~ Done: `POST /v1/auth/password/change` |
 | 5b | Payment provider for later: Stripe or Razorpay (the mock gateway is enough until then) |

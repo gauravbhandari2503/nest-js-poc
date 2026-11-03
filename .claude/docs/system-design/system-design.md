@@ -137,7 +137,7 @@ for each food:   line = unit_price × qty ; tax = round_half_up(line × FOOD tax
 total = Σ net + Σ food + Σ tax
 ```
 
-Rounding is per line, half-up, in one helper (`common/money.ts`); totals are sums of rounded lines so the invoice always adds up. The calculator is exhaustively unit-tested with property tests (total equals the sum of lines; discount never exceeds list).
+Rounding is per line, half-up, in one helper (`common/utils/money`); totals are sums of rounded lines so the invoice always adds up. The calculator is exhaustively unit-tested with property tests (total equals the sum of lines; discount never exceeds list).
 
 ### 4.4 Payment edge cases
 
@@ -314,6 +314,7 @@ graph LR
 | Client sign-up / login | Email + password, argon2id. Rate limited per IP and per email |
 | Company owner onboarding | Super admin creates company + owner (`INVITED`); an emailed one-time token (`auth_tokens`, `SET_PASSWORD`, 72 h) sets the password |
 | Staff invite | Owner creates `staff_invitations`; emailed link; acceptance creates the user, `company_staff` and `staff_theaters` in one transaction |
+| Access | 15-minute JWT, accepted from the `Authorization` header or the `access_token` `HttpOnly; Secure; SameSite=Lax` cookie (path `/`); cookie-authenticated writes must come from `FRONTEND_ORIGIN` |
 | Refresh | Rotating refresh token in an `HttpOnly; Secure; SameSite=Lax` cookie scoped to `/v1/auth`; reuse of a rotated token revokes the whole family |
 | Logout | Revokes the family |
 
@@ -345,7 +346,7 @@ graph LR
 | Queues | Bull Board at `/queues` (restrict to super admin before any shared environment) |
 | Metrics / traces | `@nestjs/observe`; business metrics worth alerting on: holds expiring per minute, outbox lag, failed jobs, 409 `SEAT_UNAVAILABLE` rate, payments `INITIATED` older than 15 min |
 | Graceful shutdown | `enableShutdownHooks()`; workers finish the active job before exit |
-| Config | One Zod schema in `src/config/env.ts`; boot fails on invalid config |
+| Config | One Zod schema in `src/config/env.validation.ts`; boot fails on invalid config |
 | Environments | Local: Docker Compose (Postgres 5433, Redis, Mailpit). CI: same services. Prod: managed Postgres + Redis (details out of scope here) |
 | Backups | Managed Postgres PITR; money tables are the restore priority |
 

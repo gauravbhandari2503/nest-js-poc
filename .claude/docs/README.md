@@ -42,7 +42,7 @@ Small defaults the docs use. Correct any that is wrong; none blocks milestone 0.
 | F | Currency | INR only; `currency` column kept |
 | G | Food scope | Per company, optionally limited to one theater |
 | H | Company cancels a show after it started? | Not allowed; only before `starts_at` |
-| I | Refresh token storage on the client | `HttpOnly` cookie (client and API must share a site or a configured cookie domain) |
+| I | Token storage on the client | Both tokens in `HttpOnly` cookies (client and API must share a site or a configured cookie domain); the bearer header is still accepted. Cookie writes need a matching `Origin` |
 
 ## Verification status
 

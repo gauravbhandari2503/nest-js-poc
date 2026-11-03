@@ -6,10 +6,11 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import { Logger } from 'nestjs-pino';
 import { ValidationPipe } from '@nestjs/common';
+
 import { AppModule, ObserveInstrument } from './app.module.js';
-import { COMPANY_SECURITY } from './common/swagger/surfaces.js';
-import { validationExceptionFactory } from './common/errors/validation.js';
-import type { Env } from './config/env.js';
+import { COMPANY_SECURITY } from './common/auth/surfaces.js';
+import { validationExceptionFactory } from './common/pipes/validation-exception.factory.js';
+import type { Env } from './config/env.validation.js';
 
 async function bootstrap() {
   const certDir = join(process.cwd(), 'certs');

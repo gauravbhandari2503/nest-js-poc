@@ -5,10 +5,10 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { Redis } from 'ioredis';
 import { ClsModule, ClsService } from 'nestjs-cls';
 import { LoggerModule } from 'nestjs-pino';
-import { type Env, validateEnv } from './config/env.js';
-import { MailModule } from './mail/mail.module.js';
-import { PrismaModule } from './prisma/prisma.module.js';
-import { RedisModule } from './redis/redis.module.js';
+import { type Env, validateEnv } from './config/env.validation.js';
+import { MailModule } from './infra/mail/mail.module.js';
+import { PrismaModule } from './infra/prisma/prisma.module.js';
+import { RedisModule } from './infra/redis/redis.module.js';
 
 /** Infrastructure shared by the HTTP app and the worker process. */
 @Module({

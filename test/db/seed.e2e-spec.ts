@@ -1,6 +1,6 @@
 import argon2 from 'argon2';
 import { INDIA_CITIES } from '../../prisma/seed/cities.js';
-import { runSeed } from '../../prisma/seed/seed.js';
+import { runSeed } from '../../prisma/seed/run.js';
 import {
   ALL_PERMISSIONS,
   SYSTEM_ROLE_PERMISSIONS,

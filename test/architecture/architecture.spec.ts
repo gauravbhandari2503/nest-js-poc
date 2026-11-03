@@ -4,6 +4,7 @@ import {
   allViolations,
   controllerSurfaceViolations,
   importViolations,
+  queryReadOnlyViolations,
   type SourceFile,
 } from './rules.js';
 
@@ -44,7 +45,7 @@ describe('the rules catch violations (so the check above means something)', () =
     expect(
       controllerSurfaceViolations(
         controller(
-          'modules/booking/controllers/client/client-bookings.controller.ts',
+          'modules/booking/controllers/client-bookings.controller.ts',
           good,
         ),
       ),
@@ -52,7 +53,7 @@ describe('the rules catch violations (so the check above means something)', () =
     expect(
       controllerSurfaceViolations(
         controller(
-          'modules/booking/controllers/client/x.controller.ts',
+          'modules/booking/controllers/client-x.controller.ts',
           good.replace("'client/", "'v1/client/"),
         ),
       ),
@@ -62,7 +63,7 @@ describe('the rules catch violations (so the check above means something)', () =
   it('flags a route prefix that disagrees with the folder', () => {
     const [violation] = controllerSurfaceViolations(
       controller(
-        'modules/booking/controllers/admin/admin-bookings.controller.ts',
+        'modules/booking/controllers/admin-bookings.controller.ts',
         `@AdminApi()\n@Controller('client/bookings')\nclass C {}`,
       ),
     );
@@ -73,7 +74,7 @@ describe('the rules catch violations (so the check above means something)', () =
     expect(
       controllerSurfaceViolations(
         controller(
-          'modules/booking/controllers/admin/x.controller.ts',
+          'modules/booking/controllers/admin-x.controller.ts',
           `@Controller('admin/bookings')\nclass C {}`,
         ),
       )[0]?.message,
@@ -81,22 +82,30 @@ describe('the rules catch violations (so the check above means something)', () =
     expect(
       controllerSurfaceViolations(
         controller(
-          'modules/booking/controllers/admin/x.controller.ts',
+          'modules/booking/controllers/admin-x.controller.ts',
           `@PlatformApi()\n@Controller('admin/bookings')\nclass C {}`,
         ),
       ),
     ).toHaveLength(1);
   });
 
-  it('flags a folder that is not a surface', () => {
+  it('flags a file name that does not start with a surface', () => {
     expect(
       controllerSurfaceViolations(
-        controller('modules/booking/controllers/staff/x.controller.ts', good),
+        controller('modules/booking/controllers/staff-x.controller.ts', good),
       )[0]?.message,
-    ).toContain('not a surface');
+    ).toContain('must start with a surface');
   });
 
   it('ignores files that are not surface controllers', () => {
+    expect(
+      controllerSurfaceViolations(
+        controller(
+          'modules/identity/controllers/auth.controller.ts',
+          `@AuthApi()\n@Controller('v1/auth')\nclass C {}`,
+        ),
+      ),
+    ).toEqual([]);
     expect(
       controllerSurfaceViolations(
         controller('app.controller.ts', 'class A {}'),
@@ -155,5 +164,38 @@ describe('the rules catch violations (so the check above means something)', () =
       SRC,
     );
     expect(violation?.rule).toBe('no-modules-import-from-infrastructure');
+  });
+
+  it('lets the composition root wire modules together', () => {
+    expect(
+      importViolations(
+        file(
+          'app.module.ts',
+          "import { IdentityModule } from './modules/identity/index.js';",
+        ),
+        SRC,
+      ),
+    ).toEqual([]);
+  });
+
+  it('keeps queries/ read-only', () => {
+    const query = (content: string) =>
+      queryReadOnlyViolations(
+        file('modules/booking/queries/admin-booking.queries.ts', content),
+      );
+    expect(query('return this.prisma.booking.findMany({});')).toEqual([]);
+    expect(query('await this.prisma.booking.update({});')[0]?.rule).toBe(
+      'queries-read-only',
+    );
+    expect(query('await this.prisma.$executeRaw`UPDATE x`;')).toHaveLength(1);
+    // The same call in services/ is fine.
+    expect(
+      queryReadOnlyViolations(
+        file(
+          'modules/booking/services/x.service.ts',
+          'prisma.booking.update()',
+        ),
+      ),
+    ).toEqual([]);
   });
 });

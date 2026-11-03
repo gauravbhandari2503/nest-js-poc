@@ -1,8 +1,8 @@
 import 'dotenv/config';
 import { PrismaPg } from '@prisma/adapter-pg';
-import { envSchema } from '../src/config/env.js';
+import { envSchema } from '../src/config/env.validation.js';
 import { PrismaClient } from '../src/generated/prisma/client.js';
-import { runSeed } from './seed/seed.js';
+import { runSeed } from './seed/run.js';
 
 // Run with `pnpm prisma db seed`. Needs DATABASE_URL, SEED_ADMIN_EMAIL, SEED_ADMIN_PASSWORD.
 const env = envSchema

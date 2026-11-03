@@ -5,7 +5,7 @@ import type { PrismaClient } from '../../src/generated/prisma/client.js';
 import {
   Idempotent,
   IdempotencyInterceptor,
-} from '../../src/common/idempotency/idempotency.interceptor.js';
+} from '../../src/common/interceptors/idempotency.interceptor.js';
 import { createTestPrisma, createUser, uid } from './helpers.js';
 
 class Controller {

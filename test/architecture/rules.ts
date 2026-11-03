@@ -35,24 +35,26 @@ const importSpecifiers = (content: string) =>
   );
 
 /**
- * Rule 1: a controller's folder, route prefix and surface decorator name the same surface.
- *   modules/booking/controllers/client/client-bookings.controller.ts
+ * Rule 1: a controller's file prefix, route prefix and surface decorator name the same surface.
+ *   modules/booking/controllers/client-bookings.controller.ts
  *     -> @Controller('client/bookings') (an optional `v1/` is allowed) and @ClientApi()
+ * The file name starts with the surface (`admin-`, `client-`, `platform-`, `public-`, `auth-`,
+ * `webhooks-`), or is exactly `<surface>.controller.ts` (e.g. `auth.controller.ts`).
  */
 export function controllerSurfaceViolations(file: SourceFile): Violation[] {
-  const match =
-    /^modules\/[^/]+\/controllers\/([^/]+)\/[^/]+\.controller\.ts$/.exec(
-      file.path,
-    );
+  const match = /^modules\/[^/]+\/controllers\/([^/]+)\.controller\.ts$/.exec(
+    file.path,
+  );
   if (!match) return [];
-  const surface = match[1]!;
+  const name = match[1]!;
+  const surface = SURFACES.find((s) => name === s || name.startsWith(`${s}-`));
   const violation = (message: string): Violation[] => [
     { file: file.path, rule: 'controller-surface', message },
   ];
 
-  if (!(SURFACES as readonly string[]).includes(surface)) {
+  if (!surface) {
     return violation(
-      `folder "${surface}" is not a surface (${SURFACES.join(', ')})`,
+      `file name "${name}.controller.ts" must start with a surface (${SURFACES.join(', ')}) followed by "-"`,
     );
   }
   const route = /@Controller\(\s*['"`]([^'"`]*)['"`]/.exec(file.content)?.[1];
@@ -61,7 +63,7 @@ export function controllerSurfaceViolations(file: SourceFile): Violation[] {
   const firstSegment = route.replace(/^\/?(v1\/)?/, '').split('/')[0];
   if (firstSegment !== surface) {
     return violation(
-      `route prefix "${route}" must start with "${surface}/" to match its folder`,
+      `route prefix "${route}" must start with "${surface}/" to match its file name`,
     );
   }
   const decorator = SURFACE_DECORATOR[surface]!;
@@ -77,7 +79,10 @@ export function controllerSurfaceViolations(file: SourceFile): Violation[] {
  * Rule 2: a module may import another module only through its `index.ts`
  * (`modules/<other>/index.js`), never its services, repositories or DTOs directly.
  * Rule 3: code outside `modules/` (common, prisma, redis...) never imports from `modules/`.
+ *   The composition roots (`app.module.ts`, `worker.module.ts`) are exempt: wiring modules together is their job.
  */
+const COMPOSITION_ROOTS = ['app.module.ts', 'worker.module.ts'];
+
 export function importViolations(
   file: SourceFile,
   srcRoot = '/src',
@@ -98,6 +103,7 @@ export function importViolations(
     const [, targetModule, rest] = toModule;
 
     if (!fromModule) {
+      if (COMPOSITION_ROOTS.includes(file.path)) continue;
       out.push({
         file: file.path,
         rule: 'no-modules-import-from-infrastructure',
@@ -117,7 +123,29 @@ export function importViolations(
   return out;
 }
 
+/**
+ * Rule 4: `queries/` is read-only (GET endpoints). Writes and business rules live in `services/`.
+ * Flags Prisma write calls and raw write SQL in `modules/<m>/queries/*.ts`.
+ */
+const WRITE_CALL =
+  /\.\s*(create|createMany|createManyAndReturn|update|updateMany|upsert|delete|deleteMany)\s*\(|\$executeRaw/;
+
+export function queryReadOnlyViolations(file: SourceFile): Violation[] {
+  if (!/^modules\/[^/]+\/queries\/[^/]+\.ts$/.test(file.path)) return [];
+  const match = WRITE_CALL.exec(file.content);
+  return match
+    ? [
+        {
+          file: file.path,
+          rule: 'queries-read-only',
+          message: `"${match[0].trim()}" is a write: move it to services/ (queries/ only reads)`,
+        },
+      ]
+    : [];
+}
+
 export const allViolations = (file: SourceFile, srcRoot?: string) => [
   ...controllerSurfaceViolations(file),
+  ...queryReadOnlyViolations(file),
   ...importViolations(file, srcRoot),
 ];

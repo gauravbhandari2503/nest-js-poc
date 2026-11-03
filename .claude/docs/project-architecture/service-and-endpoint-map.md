@@ -12,18 +12,18 @@ An endpoint belongs to exactly one surface, shown in its URL prefix, its control
 
 | Surface | URL prefix | Caller | Authentication | Controller folder | Class prefix | Swagger tag |
 | --- | --- | --- | --- | --- | --- | --- |
-| Public | `/v1/public` | Anyone, browsing | None | `controllers/public/` | `Public…Controller` | `public: <resource>` |
-| Auth | `/v1/auth` | Everyone, logging in | None / refresh cookie | `controllers/auth/` | `Auth…Controller` | `auth` |
-| **Client** | `/v1/client` | Customer (client app) | JWT, `kind = CLIENT` | `controllers/client/` | `Client…Controller` | `client: <resource>` |
-| **Admin** | `/v1/admin` | Company owner / maintenance staff (admin portal) | JWT, `kind = STAFF` + permission | `controllers/admin/` | `Admin…Controller` | `admin: <resource>` |
-| Platform | `/v1/platform` | Super admin (admin portal) | JWT, `kind = SUPER_ADMIN` | `controllers/platform/` | `Platform…Controller` | `platform: <resource>` |
-| Webhooks | `/v1/webhooks` | Payment gateway | Signature | `controllers/webhooks/` | `…WebhookController` | `webhooks` |
+| Public | `/v1/public` | Anyone, browsing | None | `controllers/public-*.controller.ts` | `Public…Controller` | `public: <resource>` |
+| Auth | `/v1/auth` | Everyone, logging in | None / refresh cookie | `controllers/auth-*.controller.ts` | `Auth…Controller` | `auth` |
+| **Client** | `/v1/client` | Customer (client app) | JWT, `kind = CLIENT` | `controllers/client-*.controller.ts` | `Client…Controller` | `client: <resource>` |
+| **Admin** | `/v1/admin` | Company owner / maintenance staff (admin portal) | JWT, `kind = STAFF` + permission | `controllers/admin-*.controller.ts` | `Admin…Controller` | `admin: <resource>` |
+| Platform | `/v1/platform` | Super admin (admin portal) | JWT, `kind = SUPER_ADMIN` | `controllers/platform-*.controller.ts` | `Platform…Controller` | `platform: <resource>` |
+| Webhooks | `/v1/webhooks` | Payment gateway | Signature | `controllers/webhooks-*.controller.ts` | `…WebhookController` | `webhooks` |
 
-Example: `POST /v1/client/bookings` → `modules/booking/controllers/client/client-bookings.controller.ts` → `ClientBookingsController` → tag `client: bookings`.
+Example: `POST /v1/client/bookings` → `modules/booking/controllers/client-bookings.controller.ts` → `ClientBookingsController` → tag `client: bookings`.
 
 Rules that make this reliable:
 
-1. A controller file lives in the folder of its surface and its route prefix matches that folder. A lint check (path vs `@Controller` prefix) enforces it.
+1. A controller file name starts with its surface and its route prefix matches it. A lint check (path vs `@Controller` prefix) enforces it.
 2. A controller never serves two surfaces. If the admin portal and client app both need "show details", there are two controllers, because the response shape and the scoping differ.
 3. Surface-level guards are applied once per controller (`@ClientOnly()`, `@StaffOnly()`, `@PlatformOnly()`); permissions per route.
 
@@ -68,7 +68,7 @@ Command services receive the actor explicitly (`create(actor, dto)`), never read
 
 | Class | Kind | Responsibility | Called by |
 | --- | --- | --- | --- |
-| `PermissionService` | Command (internal) | Load and cache (Redis, 60 s) a user's permissions and theater scope; used by guards | Guards |
+| `PermissionsService` (in `rbac`, exposed to the guard through the `PERMISSIONS_LOOKUP` token) | Command (internal) | Load and cache (Redis, 60 s) a user's permissions; used by guards and `AdminMeQueries`. Theater scope is not loaded yet | Guards |
 | `StaffInvitationService` | Command | Create invitation + email token, accept invitation | A, Pub-auth |
 | `StaffService` | Command | Change role/theaters, deactivate | A |
 | `AdminStaffQueries` | Query | List staff and invitations | A |
@@ -213,7 +213,7 @@ Command services receive the actor explicitly (`create(actor, dto)`), never read
 
 Prefix `/v1/client`. Guard: `@ClientOnly()`. Reads go through `Client…Queries`.
 
-| Method | Path | Controller (`controllers/client/`) | Calls | Notes |
+| Method | Path | Controller (`controllers/client-*`) | Calls | Notes |
 | --- | --- | --- | --- | --- |
 | GET | `/me` | `client-profile.controller` | `ClientProfileQueries.get` | |
 | PATCH | `/me` | `client-profile.controller` | `ClientProfileService.update` | |
@@ -237,7 +237,7 @@ Prefix `/v1/client`. Guard: `@ClientOnly()`. Reads go through `Client…Queries`
 
 Prefix `/v1/admin`. Guard: `@StaffOnly()`. Tenant = `companyId` from the token; theater-scoped roles are further limited in every `Admin…Queries` and ownership check. Permission codes: [matrix](../api-design/api-design.md#45-permission-matrix).
 
-| Method | Path | Controller (`controllers/admin/`) | Calls | Permission |
+| Method | Path | Controller (`controllers/admin-*`) | Calls | Permission |
 | --- | --- | --- | --- | --- |
 | GET | `/me` | `admin-me.controller` | `AdminMeQueries.get` | any staff |
 | GET | `/company` | `admin-company.controller` | `AdminCompanyQueries.get` | any staff |
@@ -284,7 +284,7 @@ Note: `POST /support-tickets` takes a `type` (`MAINTENANCE` or `PLATFORM_REQUEST
 
 ### Public (`/v1/public`, no auth)
 
-| Method | Path | Controller (`controllers/public/`) | Calls |
+| Method | Path | Controller (`controllers/public-*`) | Calls |
 | --- | --- | --- | --- |
 | GET | `/cities` | `public-catalog.controller` | `PublicCatalogQueries.cities` |
 | GET | `/movies`, `/movies/{id}` | `public-catalog.controller` | `PublicCatalogQueries` |
@@ -295,16 +295,17 @@ Note: `POST /support-tickets` takes a `type` (`MAINTENANCE` or `PLATFORM_REQUEST
 
 ### Auth (`/v1/auth`)
 
-| Method | Path | Controller (`controllers/auth/`) | Calls |
+| Method | Path | Controller (`controllers/auth-*`) | Calls |
 | --- | --- | --- | --- |
 | POST | `/register` | `auth.controller` | `AuthService.register` |
 | POST | `/login`, `/refresh`, `/logout` | `auth.controller` | `AuthService` |
 | POST | `/password/setup`, `/forgot`, `/reset` | `password.controller` | `PasswordService` |
+| POST | `/password/change` | `auth.controller` | `AuthService.changePassword` |
 | POST | `/invitations/{token}/accept` | `invitations.controller` | `StaffInvitationService.accept` |
 
 ### Platform (`/v1/platform`, super admin)
 
-| Method | Path | Controller (`controllers/platform/`) | Calls |
+| Method | Path | Controller (`controllers/platform-*`) | Calls |
 | --- | --- | --- | --- |
 | GET | `/companies`, `/companies/{id}` | `platform-companies.controller` | `PlatformCompanyQueries` |
 | POST | `/companies` | `platform-companies.controller` | `CompanyOnboardingService.onboard` |
@@ -343,7 +344,7 @@ Note: `POST /support-tickets` takes a `type` (`MAINTENANCE` or `PLATFORM_REQUEST
 ## 8. Checks that keep this map true
 
 - Lint: a controller's folder, class prefix and `@Controller` path must agree on the surface.
-- Lint: `Client…Queries` may only be injected by controllers in `controllers/client/` (and likewise per audience).
+- Lint: `Client…Queries` may only be injected by controllers in `controllers/client-*.controller.ts` (and likewise per audience).
 - Test: every admin route has a permission decorator or is explicitly marked "any staff"; a test walks the Nest route table and fails otherwise.
 - Test: every route listed here exists in `/docs-json`, and vice versa (contract check from api-design 6).
 - Update this file in the same PR that adds or moves an endpoint or service.

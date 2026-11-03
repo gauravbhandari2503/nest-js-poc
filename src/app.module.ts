@@ -7,18 +7,21 @@ import { createObserveModule } from '@nestjs/observe';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis';
 import type { Redis } from 'ioredis';
-import { AppController } from './app.controller.js';
-import { AppService } from './app.service.js';
-import { PermissionsSyncService } from './common/auth/permissions-sync.service.js';
-import type { Env } from './config/env.js';
-import { ProblemDetailsFilter } from './common/errors/problem-details.filter.js';
-import { PermissionsService } from './common/auth/permissions.service.js';
-import { IdempotencyInterceptor } from './common/idempotency/idempotency.interceptor.js';
-import { OutboxModule } from './outbox/outbox.module.js';
+import { JwtModule } from '@nestjs/jwt';
+import { JwtAuthGuard } from './common/auth/guards/jwt-auth.guard.js';
+import { PermissionsGuard } from './common/auth/guards/permissions.guard.js';
+import { TenantContextGuard } from './common/tenancy/tenant-context.guard.js';
+import { IdentityModule } from './modules/identity/index.js';
+import { RbacModule } from './modules/rbac/index.js';
+import type { Env } from './config/env.validation.js';
+import { ProblemDetailsFilter } from './common/filters/problem-details.filter.js';
+import { ResponseEnvelopeInterceptor } from './common/interceptors/response-envelope.interceptor.js';
+import { IdempotencyInterceptor } from './common/interceptors/idempotency.interceptor.js';
+import { OutboxModule } from './infra/outbox/outbox.module.js';
 import { TenancyModule } from './common/tenancy/tenancy.module.js';
 import { CoreModule } from './core.module.js';
 import { HealthModule } from './health/health.module.js';
-import { REDIS } from './redis/redis.module.js';
+import { REDIS } from './infra/redis/redis.module.js';
 
 export const { ObserveModule, ObserveInstrument } = createObserveModule();
 
@@ -47,16 +50,27 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
       }),
     }),
     BullBoardModule.forRoot({ route: '/queues', adapter: ExpressAdapter }),
+    JwtModule.registerAsync({
+      global: true,
+      inject: [ConfigService],
+      useFactory: (config: ConfigService<Env, true>) => ({
+        secret: config.get('JWT_ACCESS_SECRET', { infer: true }),
+      }),
+    }),
     HealthModule,
+    IdentityModule,
+    RbacModule,
   ],
-  controllers: [AppController],
   providers: [
-    AppService,
-    PermissionsSyncService,
-    PermissionsService,
     { provide: APP_FILTER, useClass: ProblemDetailsFilter },
+    // Envelope first (outermost), so idempotency stores and replays the bare data.
+    { provide: APP_INTERCEPTOR, useClass: ResponseEnvelopeInterceptor },
     { provide: APP_INTERCEPTOR, useClass: IdempotencyInterceptor },
+    // Order matters: throttle, authenticate, pick the company, then check permissions.
     { provide: APP_GUARD, useClass: ThrottlerGuard },
+    { provide: APP_GUARD, useClass: JwtAuthGuard },
+    { provide: APP_GUARD, useClass: TenantContextGuard },
+    { provide: APP_GUARD, useClass: PermissionsGuard },
   ],
 })
 export class AppModule {}

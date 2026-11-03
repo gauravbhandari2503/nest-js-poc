@@ -48,32 +48,40 @@ Authoritative list: [tech-stack.md](../tech-stack/tech-stack.md). The parts you 
 ```
 .
 ├── .claude/docs/            ← design docs (you are here)
+├── .claude/rules/           ← short layout and coding rules (structure, controller, dto, guard, service, test)
 ├── docker/ docker-compose.yml   ← local Postgres, Redis, Mailpit
 ├── prisma/
 │   ├── schema.prisma
 │   ├── migrations/          ← SQL migrations (incl. hand-written constraints)
-│   └── seed.ts
+│   ├── seed.ts              ← entry point
+│   └── seed/                ← run.ts, cities.ts
 ├── src/
-│   ├── main.ts              ← API entry (exists)
-│   ├── worker.ts            ← Worker entry (exists)
-│   ├── app.module.ts        ← API root module (exists)
-│   ├── core.module.ts       ← infra shared by API + worker (exists)
-│   ├── config/              ← Zod env schema (exists)
-│   ├── prisma/ redis/ mail/ health/   ← technical modules (exist)
-│   ├── queue/               ← queue names, outbox dispatcher        (planned)
-│   ├── common/              ← cross-cutting building blocks          (planned)
-│   │   ├── auth/            ← decorators, guards (@Public, @RequirePermissions…)
-│   │   ├── tenancy/         ← TenantContext (CLS)
-│   │   ├── errors/          ← DomainError, Problem Details filter, error codes
-│   │   ├── pagination/      ← keyset pagination DTOs + helper
-│   │   ├── money/           ← paise/bps arithmetic, rounding
-│   │   └── dto/ pipes/ interceptors/
-│   ├── modules/             ← business modules                       (planned)
+│   ├── main.ts              ← API entry
+│   ├── worker.ts            ← Worker entry
+│   ├── app.module.ts        ← API composition root: imports modules, registers global guards
+│   ├── core.module.ts       ← infra shared by API + worker
+│   ├── config/              ← env.validation.ts (Zod schema, fails fast)
+│   ├── health/              ← operational exception at the root; do not add other top-level folders
+│   ├── infra/               ← adapters to external systems, no business logic
+│   │   ├── prisma/ redis/ mail/
+│   │   └── outbox/          ← outbox writer + dispatcher (payment gateway adapter goes here later)
+│   ├── common/              ← glue with no business concepts and no business-service DB access
+│   │   ├── auth/            ← by concern: authenticated-user, permission catalog, @Public/@RequirePermissions,
+│   │   │   └── guards/        surface decorators, PERMISSIONS_LOOKUP token; guards/ = JwtAuthGuard, PermissionsGuard
+│   │   ├── tenancy/         ← by concern: TenantContext (CLS) + TenantContextGuard
+│   │   └── filters/ interceptors/ pipes/ dto/ errors/ utils/   ← by type: generic glue
+│   │                          (utils/ holds money/ and pagination/)
+│   ├── modules/             ← business modules (identity, rbac so far)
 │   └── generated/           ← Prisma client (gitignored)
-└── test/                    ← e2e tests
+└── test/                    ← HTTP and database tests (*.e2e-spec.ts), architecture/ rules test
 ```
 
-Rule of thumb: `common/` knows nothing about business concepts; `modules/` are business concepts; the existing technical folders (`prisma`, `redis`, `mail`) are infrastructure that modules consume.
+Rules of thumb:
+
+- `common/` knows nothing about business concepts. When it needs an answer a module owns, it declares an interface and an injection token and the module provides it (the permissions guard asks for `PERMISSIONS_LOOKUP`, which `rbac` implements).
+- `infra/` and `common/` never import from `modules/`; modules import each other only through `index.ts`. `test/architecture` enforces both, plus controller naming and read-only `queries/`.
+- Inside `common/`, a concern that has its own module (`auth`, `tenancy`) keeps its guards and decorators with it; generic glue is grouped by type. Never both in one folder.
+- Details and the reasoning live in [.claude/rules/structure.md](../../rules/structure.md).
 
 ## 4. Business modules
 
@@ -111,7 +119,7 @@ graph TD
     L3["Layer 3 — Transactions<br/>booking · payments"]
     L2["Layer 2 — Commercial setup<br/>shows · pricing · food · memberships"]
     L1["Layer 1 — Master data & identity<br/>identity · rbac · companies · catalog · venues · audit"]
-    L0["Layer 0 — Infrastructure<br/>prisma · redis · queue · mail · config · common"]
+    L0["Layer 0 — Infrastructure<br/>infra (prisma · redis · mail · outbox) · config · common"]
     L4 --> L3 --> L2 --> L1 --> L0
 ```
 
@@ -131,12 +139,11 @@ Every module has the same shape, so you always know where to look:
 modules/booking/
 ├── booking.module.ts
 ├── index.ts                         ← the public API: what other modules may import
-├── controllers/                     ← ONE FOLDER PER SURFACE (who calls the endpoint)
-│   ├── client/
-│   │   └── client-bookings.controller.ts      → /v1/client/bookings
-│   └── admin/
-│       ├── admin-bookings.controller.ts       → /v1/admin/bookings
-│       └── admin-tickets.controller.ts        → /v1/admin/tickets
+├── controllers/                     ← flat; the FILE NAME PREFIX is the surface (who calls the endpoint)
+│   ├── client-bookings.controller.ts          → /v1/client/bookings
+│   ├── admin-bookings.controller.ts           → /v1/admin/bookings
+│   ├── admin-tickets.controller.ts            → /v1/admin/tickets
+│   └── __tests__/
 ├── services/                        ← COMMANDS: use cases that change state (shared by every surface)
 │   ├── booking-checkout.service.ts            ← create hold + payment
 │   ├── booking-confirmation.service.ts        ← confirm after payment (worker)
@@ -151,21 +158,24 @@ modules/booking/
 │   └── seat-claim.repository.ts               ← the ONLY place with raw SQL for the seat claim
 ├── processors/
 │   └── booking-expiry.processor.ts            ← BullMQ processor (registered in the worker)
-├── dto/
+├── dto/                             ← shared DTOs at the root; admin/ and client/ subfolders ONLY when the surfaces need different shapes
 │   ├── create-booking.dto.ts                  ← request
-│   ├── client-booking.response.dto.ts         ← response per audience (never return Prisma models)
-│   └── admin-booking.response.dto.ts
-└── *.spec.ts                        ← next to the code they test
+│   ├── client/client-booking.response.dto.ts  ← response per audience (never return Prisma models)
+│   └── admin/admin-booking.response.dto.ts
+├── constants/
+└── <folder>/__tests__/              ← unit tests live in a __tests__ folder inside the folder of the code they test
 ```
+
+No barrel (`index.ts`) per folder; the only barrel is the module's own `index.ts`, which is its public API.
 
 **Finding things.** Start from what you have:
 
 | You have | Look in |
 | --- | --- |
-| A URL (`POST /v1/client/bookings`) | `modules/*/controllers/client/` → the controller names its service method |
-| A permission code | `src/common/auth/permissions.ts`, then grep `@RequirePermissions(Permission.X)` |
+| A URL (`POST /v1/client/bookings`) | `modules/*/controllers/client-*.controller.ts` → the controller names its service method |
+| A permission code | `src/common/auth/permissions.ts` (catalog); the lookup is `modules/rbac/services/permissions.service.ts`; grep `@RequirePermissions(Permission.X)` |
 | A table | The owning module (section 4.1), `services/` writes it, `queries/` reads it |
-| A queue job or cron | `modules/*/processors/` |
+| A queue job or cron | `modules/*/processors/` (later `jobs/`); the outbox dispatcher is `infra/outbox` |
 | A business rule | `modules/*/domain/` |
 
 The full lookup, endpoint by endpoint and service by service, is in [service-and-endpoint-map](service-and-endpoint-map.md).
@@ -245,7 +255,7 @@ Example: "company owner creates a show".
 | Types | No `any`. Parse `unknown` with DTO/Zod. Response DTOs are classes (Swagger plugin picks them up) |
 | Config | Read through `ConfigService<Env, true>`; never `process.env` in feature code; add new variables to the Zod schema and `.env.example` |
 | Time | Store and compute in UTC; use the DB `now()` for hold and expiry comparisons |
-| Money | `number` of paise and bps; use `common/money` helpers; never floats |
+| Money | `number` of paise and bps; use `common/utils/money` helpers; never floats |
 | IDs | UUID strings; validate with `@IsUUID()` / `ParseUUIDPipe` |
 | Logging | Inject `PinoLogger`; log ids, not PII; no `console.log` |
 | Comments | Explain *why* only; the code says *what* |
@@ -299,7 +309,7 @@ Build in vertical slices so each milestone is demoable and testable. Nothing sta
 
 | # | Milestone | Contents | Exit check |
 | --- | --- | --- | --- |
-| 0 | **Foundations** | `common/` (errors, pagination, money, auth decorators), Problem Details filter, env additions, CI | Lint/test/build green; error format e2e test |
+| 0 | **Foundations** | `common/` (errors, pagination, money, auth decorators) and `infra/`, Problem Details filter, env additions, CI | Lint/test/build green; error format e2e test |
 | 1 | **Identity & RBAC** | Schema for users/roles/permissions/refresh tokens, seed, login/refresh, `PermissionsGuard`, `/me` | Auth e2e, permission matrix test |
 | 2 | **Companies & staff** | Company onboarding (super admin), password-setup email, staff invites, audit log | Onboard → email in Mailpit → login |
 | 3 | **Venues & catalog** | Cities, movies, theaters, screens, seats, categories | Tenant isolation tests |

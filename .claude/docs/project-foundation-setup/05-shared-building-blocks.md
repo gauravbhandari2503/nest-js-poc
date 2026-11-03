@@ -2,7 +2,7 @@
 
 Part of the [project foundation setup](README.md). The reusable pieces every feature module builds on: money arithmetic, pagination, the outbox, idempotent requests, Swagger surfaces, and the architecture rules. All of it lives outside `modules/`, knows nothing about business concepts, and is tested.
 
-## 1. Money (`src/common/money`)
+## 1. Money (`src/common/utils/money`)
 
 Money is an integer number of **paise**, rates are integer **basis points** (18% = 1800). All rounding goes through one file, so totals are reproducible.
 
@@ -15,9 +15,9 @@ Money is an integer number of **paise**, rates are integer **basis points** (18%
 
 The tests include 1000 pseudo-random splits that check the sum is exact and every part is within one paisa of its exact share.
 
-## 2. Pagination (`src/common/pagination`)
+## 2. Pagination (`src/common/utils/pagination`)
 
-Keyset (cursor) pagination only, never `OFFSET`. Response shape: `{ "data": [...], "page": { "nextCursor": "…", "hasMore": true } }`.
+Keyset (cursor) pagination only, never `OFFSET`. Every paginated endpoint returns `buildPage(...)`, so its `data` is always `{ "items": [...], "page": { "nextCursor": "…", "hasMore": true } }` inside the response envelope.
 
 ```ts
 // controller: take the query DTO (extend PaginationQueryDto to add filters)
@@ -35,7 +35,7 @@ return buildPage(rows, query.limit, (row) => ({ sortKey: dateSortKey(row.created
 
 `limit` defaults to 20, max 100 (422 outside 1–100). The cursor is base64url of the last row's sort value and id; a malformed one gives `422 VALIDATION_FAILED`. The sort is fixed per endpoint, with `id` as the tie-breaker.
 
-## 3. Outbox (`src/outbox`)
+## 3. Outbox (`src/infra/outbox`)
 
 A state change that needs follow-up work (email, confirmation after payment, refund) writes an event **in the same transaction**, so a committed change always has its follow-up recorded and a rolled-back one never does.
 
@@ -82,7 +82,7 @@ One decorator per API surface, put on each controller: `@PublicApi()`, `@AuthApi
 
 Checked on every `pnpm test` over all of `src/`:
 
-1. **Controller surface.** `modules/<m>/controllers/<surface>/x.controller.ts` must have `@Controller('<surface>/…')` (an optional `v1/` is allowed) and the matching `@…Api()` decorator.
+1. **Controller surface.** `modules/<m>/controllers/<surface>-x.controller.ts` must have `@Controller('<surface>/…')` (an optional `v1/` is allowed) and the matching `@…Api()` decorator.
 2. **Module public API.** A module imports another module only through `modules/<other>/index.js`, never its services, repositories or DTOs.
 3. **Infrastructure stays below.** Code outside `modules/` (common, prisma, redis…) never imports from `modules/`.
 

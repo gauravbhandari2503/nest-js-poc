@@ -8,8 +8,8 @@ Part of the [project foundation setup](README.md). This step covers three of the
 | --- | --- |
 | [src/common/errors/error-codes.ts](../../../src/common/errors/error-codes.ts) | `ErrorCode` constants and the HTTP status of each, matching the [error catalogue](../api-design/api-design.md) |
 | [domain-error.ts](../../../src/common/errors/domain-error.ts) | `new DomainError(ErrorCode.SeatUnavailable, 'Seats A5 taken', { seatIds })`. The status comes from the code, so services never pick HTTP statuses |
-| [problem-details.filter.ts](../../../src/common/errors/problem-details.filter.ts) | Global filter (`APP_FILTER`): renders `application/problem+json` with `type`, `title`, `status`, `code`, `detail`, `instance`, `correlationId` and any extensions |
-| [validation.ts](../../../src/common/errors/validation.ts) | `exceptionFactory` of the global `ValidationPipe`: DTO failures become `422 VALIDATION_FAILED` with `errors: [{ field, message }]` (nested fields as `food.quantity`) |
+| [problem-details.filter.ts](../../../src/common/filters/problem-details.filter.ts) | Global filter (`APP_FILTER`): renders `application/problem+json` with `type`, `title`, `status`, `code`, `detail`, `instance`, `correlationId` and any extensions |
+| [validation.ts](../../../src/common/pipes/validation-exception.factory.ts) | `exceptionFactory` of the global `ValidationPipe`: DTO failures become `422 VALIDATION_FAILED` with `errors: [{ field, message }]` (nested fields as `food.quantity`) |
 
 Rules: throw `DomainError` for business failures; framework exceptions (404, 401, 429…) are mapped to catalogue codes; anything unexpected becomes `500 INTERNAL` with a generic message, and the real error goes to the log with the correlation id. Stack traces, SQL and Prisma messages never reach a client. To add a code: add it to `ErrorCode` and `ERROR_STATUS`, and to the catalogue table in api-design.
 
@@ -24,11 +24,11 @@ Rules: throw `DomainError` for business failures; framework exceptions (404, 401
 | `@RequirePermissions(Permission.ShowManage)` | Every listed permission is required |
 | `@CurrentUser()` / `@CurrentCompany()` | Parameter decorators: the authenticated user, and the company the request acts on |
 | `PermissionsGuard` | Checks the account type from the decorators above, then the permissions |
-| `PermissionsService.forUser()` | The one answer to "what may this user do?" |
+| `PermissionsService.forUser()` (in `modules/rbac`, reached by the guard via `PERMISSIONS_LOOKUP`) | The one answer to "what may this user do?" |
 
 `PermissionsService` returns: **every permission for a super admin**, the role's permissions for active staff, nothing for deactivated staff or customers. The permission guard and `GET /v1/admin/me` both use it. The frontend works with permission codes only (never role names), so the super admin's `/me` lists all codes, and what the UI shows always matches what the server allows.
 
-Permissions are queried from the database on each call for now. Caching them in Redis (60 s TTL) is a milestone 1 task.
+Staff permissions are cached in Redis for 60 s (`permissions:<userId>`). Code that changes a role, a role's permissions or a staff member's active state must call `PermissionsService.evict(userId)`; otherwise the change shows up within a minute. If Redis is down the service reads the database.
 
 ## 3. Tenancy: which company is this request about?
 
@@ -44,11 +44,9 @@ For a super admin, `TenantContext.actingAs` is true so audit logs can record "su
 
 On routes that are not `@StaffOnly` the guard only records the user; no company is set.
 
-## Not wired up yet
+## Global guard order
 
-The guards exist and are unit tested, but they are **not registered globally**, because nothing populates `request.user` until the JWT guard exists (milestone 1). Registering them now would reject every request. When milestone 1 adds `JwtAuthGuard`, the global order is: Throttler → JwtAuthGuard (skips `@Public`) → TenantContextGuard → PermissionsGuard.
-
-What is registered today: the `ProblemDetailsFilter`, the validation `exceptionFactory`, `TenancyModule` and `PermissionsService` (all in `AppModule` / `main.ts`).
+Registered in `AppModule` as `APP_GUARD`s, in this order: Throttler → [JwtAuthGuard](../../../src/common/auth/guards/jwt-auth.guard.ts) (skips `@Public`) → TenantContextGuard → PermissionsGuard. The last two also skip `@Public` routes. `@Authenticated()` on a single route overrides a controller-level `@Public()` (used by `POST /v1/auth/password/change`). Every controller must therefore carry a surface decorator or `@Public()`; a route with neither requires a login but no particular account type.
 
 ## Tests
 
@@ -58,4 +56,4 @@ What is registered today: the `ProblemDetailsFilter`, the validation `exceptionF
 - tenant guard: staff ignore the header; super admin needs a valid existing company; customers and token-less staff rejected; no company on platform routes
 - permission service and guard: super admin holds every code, staff only their role's, deactivated staff nothing; account-type rules for admin, platform and client routes
 
-Still to write in milestone 1, once login exists: end-to-end cross-tenant tests (company A's token gets 404 for company B's id; staff sending the header still sees only their own company).
+HTTP-level tests of the wired-up guards are in `test/auth/auth.e2e-spec.ts` (see [identity and rbac](../project-architecture/build-plan.md)). Cross-tenant 404 tests per endpoint start with the first company-scoped endpoints in milestone 3.

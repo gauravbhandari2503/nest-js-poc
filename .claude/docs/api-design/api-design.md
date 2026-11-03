@@ -22,11 +22,25 @@ The OpenAPI document is **generated from the controllers and DTOs**, not hand-wr
 
 ## 2. Envelopes
 
-### Single resource: the object itself
+### Every response: one envelope (`ApiResponseDto`)
+
+Success and error responses share the same fields. `ResponseEnvelopeInterceptor` wraps every success; `ProblemDetailsFilter` builds every error. A `204` has no body.
 
 ```json
-{ "id": "0194…", "status": "PENDING", "heldUntil": "2026-11-02T14:10:00.000Z" }
+{
+  "isSuccess": true,
+  "statusCode": 200,
+  "message": "OK",
+  "description": null,
+  "data": { "id": "0194…", "status": "PENDING" },
+  "errors": null,
+  "code": null,
+  "correlationId": "7c1d…"
+}
 ```
+
+- `data` is the endpoint's response DTO (null on errors). `code` is null on success.
+- Clients switch on `code` and `isSuccess`, never on `message`.
 
 ### Collections: keyset (cursor) pagination, always
 
@@ -36,32 +50,41 @@ GET /v1/client/bookings?limit=20&cursor=eyJjIjoiMjAyNi0xMS0wMlQxNDowMDowMFoiLCJp
 
 ```json
 {
-  "data": [ { "id": "0194…" } ],
-  "page": { "nextCursor": "eyJ…", "hasMore": true }
+  "isSuccess": true,
+  "statusCode": 200,
+  "message": "OK",
+  "description": null,
+  "data": {
+    "items": [ { "id": "0194…" } ],
+    "page": { "nextCursor": "eyJ…", "hasMore": true }
+  },
+  "errors": null,
+  "code": null,
+  "correlationId": "7c1d…"
 }
 ```
 
 - `limit` default 20, max 100. The cursor is opaque (base64 of the last `(sortKey, id)`); never exposes offsets.
 - Sort is fixed per endpoint, with `id` as tie-breaker. Filters are explicit query params (`status`, `cityId`, `from`, `to`), validated by DTO. No `OFFSET` anywhere.
 
-### Errors: RFC 7807 `application/problem+json`
+### Errors: same envelope, `isSuccess: false`
 
 ```json
 {
-  "type": "https://api.bookmyticket.test/errors/seat-unavailable",
-  "title": "Seat unavailable",
-  "status": 409,
+  "isSuccess": false,
+  "statusCode": 409,
+  "message": "Seat unavailable",
+  "description": "Seats A5, A6 were taken by another customer.",
+  "data": null,
+  "errors": { "seatIds": ["0194…", "0194…"] },
   "code": "SEAT_UNAVAILABLE",
-  "detail": "Seats A5, A6 were taken by another customer.",
-  "instance": "/v1/client/bookings",
-  "correlationId": "7c1d…",
-  "seatIds": ["0194…", "0194…"]
+  "correlationId": "7c1d…"
 }
 ```
 
-Validation errors add `"errors": [{ "field": "seatIds", "message": "must contain at most 10 elements" }]` (status 422).
+Validation errors (status 422) put the field list in `errors`: `[{ "field": "seatIds", "message": "must contain at most 10 elements" }]`. Other errors put their extra fields there, or `null`.
 
-The clients switch on `code`, which is stable and documented; `detail` is for humans.
+The clients switch on `code`, which is stable and documented; `description` is for humans.
 
 ### Error catalogue
 
@@ -69,6 +92,9 @@ The clients switch on `code`, which is stable and documented; `detail` is for hu
 | --- | --- | --- |
 | `VALIDATION_FAILED` | 422 | DTO validation |
 | `UNAUTHENTICATED` / `TOKEN_EXPIRED` | 401 | Missing, invalid or expired access token |
+| `INVALID_CREDENTIALS` | 401 | Wrong email or password (one message for both, so accounts cannot be probed) |
+| `LINK_INVALID` | 422 | Emailed token (set/reset password) unknown, used or expired |
+| `EMAIL_TAKEN` | 409 | Registration with an email that already has an account |
 | `FORBIDDEN` | 403 | Missing permission, or the route is not available to the caller's account type |
 | `COMPANY_CONTEXT_REQUIRED` | 400 | Super admin called a company route without a valid `X-Company-Id` |
 | `NOT_FOUND` | 404 | Missing or outside the caller's tenant |
@@ -94,7 +120,7 @@ The clients switch on `code`, which is stable and documented; `detail` is for hu
 
 | | |
 | --- | --- |
-| Access token | `Authorization: Bearer <JWT>`, 15 minutes. Claims: `sub`, `kind`, `companyId` (staff only; the super admin has none) |
+| Access token | JWT, 15 minutes. Claims: `sub`, `kind`, `companyId` (staff only; the super admin has none). Sent as `Authorization: Bearer <JWT>` (the header wins) or as the `access_token` `HttpOnly; Secure; SameSite=Lax` cookie set by login and refresh. A cookie-authenticated `POST`/`PATCH`/`PUT`/`DELETE` must carry `Origin` equal to `FRONTEND_ORIGIN`, else 403 (CSRF). The login body still returns the token for non-browser clients |
 | Refresh | `POST /v1/auth/refresh` using the `HttpOnly` refresh cookie; rotates on every use |
 | Permissions | Not in the token. `GET /v1/admin/me` returns the permission list so the portal can hide menus (the frontend works with permission codes only, never role names); the server still checks every call. **For a super admin the list is every permission code**, because they may do everything on company routes |
 | Throttling | Global default; `/auth/*` and `POST /client/bookings` stricter; per-IP and per-account |
@@ -112,7 +138,8 @@ The clients switch on `code`, which is stable and documented; `detail` is for hu
 | POST | `/refresh` | Rotate refresh token |
 | POST | `/logout` | Revoke the session family |
 | POST | `/password/setup` | Set password with emailed token (new owner, invited staff) |
-| POST | `/password/forgot`, `/password/reset` | Reset flow |
+| POST | `/password/forgot`, `/password/reset` | Reset flow (`forgot` always answers 202) |
+| POST | `/password/change` | Logged-in user changes their password (needs the current one); ends their other sessions |
 | POST | `/invitations/{token}/accept` | Staff accepts an invitation |
 
 ### 4.2 Public (`/v1/public`, no auth)
@@ -153,7 +180,7 @@ The clients switch on `code`, which is stable and documented; `detail` is for hu
 | Caller | Company comes from | Permissions |
 | --- | --- | --- |
 | Company staff | Their token. An `X-Company-Id` header is ignored | Their role's permissions |
-| Super admin | The **`X-Company-Id`** header, required on every call: missing or not a uuid → `400 COMPANY_CONTEXT_REQUIRED`, unknown company → `404 NOT_FOUND` | All of them; `GET /me` returns every permission code. Theater scope (`staff_theaters`) does not apply |
+| Super admin | The **`X-Company-Id`** header, required on every call: missing or not a uuid → `400 COMPANY_CONTEXT_REQUIRED`, unknown company → `404 NOT_FOUND`. Exception: `GET /admin/me` works without the header (`company: null`) so the portal can load the profile before a company is picked | All of them; `GET /me` returns every permission code. Theater scope (`staff_theaters`) does not apply |
 | Customer | n/a | `403 FORBIDDEN` |
 
 A suspended company can still be acted on by the super admin. Every write by a super admin is audit-logged with the actor and the company they acted on. Money and ledger records stay append-only for everyone.

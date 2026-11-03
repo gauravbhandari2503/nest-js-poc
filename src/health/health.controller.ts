@@ -7,10 +7,12 @@ import {
 } from '@nestjs/terminus';
 import { SkipThrottle } from '@nestjs/throttler';
 import type { Redis } from 'ioredis';
-import { PrismaService } from '../prisma/prisma.service.js';
-import { REDIS } from '../redis/redis.module.js';
+import { Public } from '../common/auth/auth.decorators.js';
+import { PrismaService } from '../infra/prisma/prisma.service.js';
+import { REDIS } from '../infra/redis/redis.module.js';
 
 @ApiExcludeController()
+@Public()
 @SkipThrottle()
 @Controller('health')
 export class HealthController {

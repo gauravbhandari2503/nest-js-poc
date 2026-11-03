@@ -21,7 +21,7 @@ Not seeded on purpose: membership plans and offers (business choices made by the
 | File | Role |
 | --- | --- |
 | `prisma/seed.ts` | Entry point: reads and validates env (Zod, reusing the app schema), opens a Prisma client, calls `runSeed` |
-| `prisma/seed/seed.ts` | The logic, one exported function per data set, so tests call them directly |
+| `prisma/seed/run.ts` | The logic, one exported function per data set, so tests call them directly |
 | `prisma/seed/cities.ts` | Reference data: state → cities |
 | `prisma.config.ts` | `migrations.seed: 'tsx prisma/seed.ts'` registers the command with the Prisma CLI |
 
@@ -37,7 +37,7 @@ Each step is keyed on a natural unique value and never overwrites data someone m
 
 ## Boot check
 
-[PermissionsSyncService](../../../src/common/auth/permissions-sync.service.ts) runs when the API starts and compares the `permissions` table with `ALL_PERMISSIONS`. If they differ, the app refuses to start and the log says what is missing and to run the seed. This catches "deployed new code, forgot the seed" before guards deny or allow the wrong things. It was checked by deleting a permission from the dev database: the app failed with the message, and the seed restored it.
+[PermissionsSyncService](../../../src/modules/rbac/services/permissions-sync.service.ts) runs when the API starts and compares the `permissions` table with `ALL_PERMISSIONS`. If they differ, the app refuses to start and the log says what is missing and to run the seed. This catches "deployed new code, forgot the seed" before guards deny or allow the wrong things. It was checked by deleting a permission from the dev database: the app failed with the message, and the seed restored it.
 
 When you add a permission: add it to `Permission` in code, add it to the right entries of `SYSTEM_ROLE_PERMISSIONS`, run the seed.
 
@@ -61,7 +61,7 @@ When you add a permission: add it to `Permission` in code, add it to the right e
 - a permission removed from code is deleted, and a deleted role link is restored
 - an existing non-admin user is not adopted as super admin
 
-`src/common/auth/permissions-sync.service.spec.ts` covers the boot check.
+`src/modules/rbac/services/__tests__/permissions-sync.service.spec.ts` covers the boot check.
 
 ## Setting this up in a new project
 

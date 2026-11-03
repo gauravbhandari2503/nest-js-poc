@@ -4,7 +4,7 @@ Part of the [project foundation setup](README.md). Read this to see how configur
 
 ## What it gives you
 
-- One Zod schema ([src/config/env.ts](../../../src/config/env.ts)) is the source of truth for every environment variable. The app fails at startup with a readable error if a variable is missing or invalid.
+- One Zod schema ([src/config/env.validation.ts](../../../src/config/env.validation.ts)) is the source of truth for every environment variable. The app fails at startup with a readable error if a variable is missing or invalid.
 - Three env files with separate jobs: `.env` (local dev, gitignored), `.env.example` (template, committed), `.env.test` (test DB, committed, no secrets).
 - Integration/e2e tests and test migrations run against a separate database, never the dev one.
 

@@ -1,10 +1,10 @@
 import type { ClsService } from 'nestjs-cls';
 import { mock } from 'vitest-mock-extended';
 import type { PrismaClient } from '../../src/generated/prisma/client.js';
-import { OutboxDispatcher } from '../../src/outbox/outbox-dispatcher.js';
-import { OutboxHandlerRegistry } from '../../src/outbox/outbox-handler.registry.js';
-import { OutboxService } from '../../src/outbox/outbox.service.js';
-import type { OutboxMessage } from '../../src/outbox/outbox.types.js';
+import { OutboxDispatcher } from '../../src/infra/outbox/outbox-dispatcher.js';
+import { OutboxHandlerRegistry } from '../../src/infra/outbox/outbox-handler.registry.js';
+import { OutboxService } from '../../src/infra/outbox/outbox.service.js';
+import type { OutboxMessage } from '../../src/infra/outbox/outbox.types.js';
 import { createTestPrisma, uid } from './helpers.js';
 
 // outbox_events is shared and never truncated, so every test uses its own event type
