@@ -314,7 +314,7 @@ graph LR
 | Client sign-up / login | Email + password, argon2id. Rate limited per IP and per email |
 | Company owner onboarding | Super admin creates company + owner (`INVITED`); an emailed one-time token (`auth_tokens`, `SET_PASSWORD`, 72 h) sets the password |
 | Staff invite | Owner creates `staff_invitations`; emailed link; acceptance creates the user, `company_staff` and `staff_theaters` in one transaction |
-| Access | 15-minute JWT, accepted from the `Authorization` header or the `access_token` `HttpOnly; Secure; SameSite=Lax` cookie (path `/`); cookie-authenticated writes must come from `FRONTEND_ORIGIN` |
+| Access | 15-minute JWT, accepted from the `Authorization` header or the `access_token` `HttpOnly; Secure; SameSite=Lax` cookie (path `/`); cookie-authenticated writes with an `Origin` other than `FRONTEND_ORIGIN` are rejected |
 | Refresh | Rotating refresh token in an `HttpOnly; Secure; SameSite=Lax` cookie scoped to `/v1/auth`; reuse of a rotated token revokes the whole family |
 | Logout | Revokes the family |
 

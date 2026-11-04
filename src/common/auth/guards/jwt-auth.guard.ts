@@ -23,8 +23,11 @@ interface AccessClaims {
  * Verifies the access token and puts the claims on `request.user`. The token comes from
  * the `Authorization: Bearer` header, or else from the `access_token` HttpOnly cookie.
  * Cookies are sent by the browser on its own, so a cookie-authenticated call that changes
- * data must come from the frontend's origin (CSRF). Routes marked `@Public()` skip it. First of the three auth guards (then TenantContextGuard, then
- * PermissionsGuard), so the others can rely on `request.user`.
+ * data is rejected when its `Origin` is not the frontend's (CSRF). Browsers always send
+ * `Origin` on cross-site writes; a request without one is not a page on another site
+ * (Postman, curl, a server), so it passes. Routes marked `@Public()` skip it.
+ * First of the three auth guards (then TenantContextGuard, then PermissionsGuard), so the
+ * others can rely on `request.user`.
  */
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
@@ -90,9 +93,11 @@ export class JwtAuthGuard implements CanActivate {
       );
     }
     const method = (request.method ?? 'GET').toUpperCase();
+    const origin = request.headers['origin'];
     if (
       !SAFE_METHODS.includes(method) &&
-      request.headers['origin'] !== this.frontendOrigin
+      origin !== undefined &&
+      origin !== this.frontendOrigin
     ) {
       throw new DomainError(
         ErrorCode.Forbidden,

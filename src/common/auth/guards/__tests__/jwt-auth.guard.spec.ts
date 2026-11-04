@@ -106,13 +106,16 @@ describe('JwtAuthGuard', () => {
       expect((req as { user?: { id: string } }).user?.id).toBe(USER_ID);
     });
 
-    it('lets a cookie POST through only from the frontend origin', async () => {
+    it('blocks a cookie POST from another origin, and allows the frontend or no origin', async () => {
       const token = await signed();
       await expect(
         cookieRun(token, { method: 'POST', headers: { origin: ORIGIN } })
           .result,
       ).resolves.toBe(true);
-      for (const origin of [undefined, 'https://evil.test', 'null']) {
+      await expect(cookieRun(token, { method: 'POST' }).result).resolves.toBe(
+        true,
+      );
+      for (const origin of ['https://evil.test', 'null']) {
         await expect(
           cookieRun(token, { method: 'POST', headers: { origin } }).result,
         ).rejects.toMatchObject({ code: 'FORBIDDEN' });

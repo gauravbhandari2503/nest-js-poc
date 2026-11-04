@@ -81,13 +81,13 @@ describe('auth and rbac (HTTP)', () => {
       );
     });
 
-    it('authenticates from the cookie alone, and checks the origin on writes', async () => {
+    it('authenticates from the cookie alone, and rejects a write from another origin', async () => {
       const res = await login(owner.email).expect(200);
       const cookie = `access_token=${cookieOf(res, 'access_token')!.value}`;
       await http.get('/v1/admin/me').set('Cookie', cookie).expect(200);
       await http
         .post('/v1/auth/password/change')
-        .set('Cookie', cookie)
+        .set({ Cookie: cookie, Origin: 'https://evil.test' })
         .send({ currentPassword: PASSWORD, newPassword: 'another-long-pass-1' })
         .expect(403);
     });

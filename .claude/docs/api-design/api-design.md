@@ -120,7 +120,7 @@ The clients switch on `code`, which is stable and documented; `description` is f
 
 | | |
 | --- | --- |
-| Access token | JWT, 15 minutes. Claims: `sub`, `kind`, `companyId` (staff only; the super admin has none). Sent as `Authorization: Bearer <JWT>` (the header wins) or as the `access_token` `HttpOnly; Secure; SameSite=Lax` cookie set by login and refresh. A cookie-authenticated `POST`/`PATCH`/`PUT`/`DELETE` must carry `Origin` equal to `FRONTEND_ORIGIN`, else 403 (CSRF). The login body still returns the token for non-browser clients |
+| Access token | JWT, 15 minutes. Claims: `sub`, `kind`, `companyId` (staff only; the super admin has none). Sent as `Authorization: Bearer <JWT>` (the header wins) or as the `access_token` `HttpOnly; Secure; SameSite=Lax` cookie set by login and refresh. A cookie-authenticated `POST`/`PATCH`/`PUT`/`DELETE` is rejected with 403 (CSRF) when it has an `Origin` other than `FRONTEND_ORIGIN`; no `Origin` (Postman, curl, servers) is allowed, since browsers always send it on cross-site writes. The login body still returns the token for non-browser clients |
 | Refresh | `POST /v1/auth/refresh` using the `HttpOnly` refresh cookie; rotates on every use |
 | Permissions | Not in the token. `GET /v1/admin/me` returns the permission list so the portal can hide menus (the frontend works with permission codes only, never role names); the server still checks every call. **For a super admin the list is every permission code**, because they may do everything on company routes |
 | Throttling | Global default; `/auth/*` and `POST /client/bookings` stricter; per-IP and per-account |
