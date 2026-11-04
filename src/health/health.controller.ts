@@ -14,7 +14,7 @@ import { REDIS } from '../infra/redis/redis.module.js';
 @ApiExcludeController()
 @Public()
 @SkipThrottle()
-@Controller('health')
+@Controller('v1/health')
 export class HealthController {
   constructor(
     private readonly health: HealthCheckService,
