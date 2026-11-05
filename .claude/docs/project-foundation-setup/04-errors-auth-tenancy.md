@@ -26,7 +26,7 @@ Rules: throw `DomainError` for business failures; framework exceptions (404, 401
 | `PermissionsGuard` | Checks the account type from the decorators above, then the permissions |
 | `PermissionsService.forUser()` (in `modules/rbac`, reached by the guard via `PERMISSIONS_LOOKUP`) | The one answer to "what may this user do?" |
 
-`PermissionsService` returns: **every permission for a super admin**, the role's permissions for active staff, nothing for deactivated staff or customers. The permission guard and `GET /v1/admin/me` both use it. The frontend works with permission codes only (never role names), so the super admin's `/me` lists all codes, and what the UI shows always matches what the server allows.
+`PermissionsService` returns: **every permission for a super admin**, the role's permissions for active staff, nothing for deactivated staff or customers. The permission guard and `GET /v1/auth/me` both use it. The frontend works with permission codes only (never role names), so the super admin's `/me` lists all codes, and what the UI shows always matches what the server allows.
 
 Staff permissions are cached in Redis for 60 s (`permissions:<userId>`). Code that changes a role, a role's permissions or a staff member's active state must call `PermissionsService.evict(userId)`; otherwise the change shows up within a minute. If Redis is down the service reads the database.
 

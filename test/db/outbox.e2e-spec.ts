@@ -14,8 +14,13 @@ describe('outbox', () => {
   let prisma: PrismaClient;
   let outbox: OutboxService;
 
-  beforeAll(() => {
+  beforeAll(async () => {
     prisma = createTestPrisma();
+    // Earlier runs leave unhandled `test.*` events behind. Enough of them fill the
+    // dispatcher's batch of 50 and starve the event a test has just written.
+    await prisma.outboxEvent.deleteMany({
+      where: { processedAt: null, type: { startsWith: 'test.' } },
+    });
     const cls = mock<ClsService>();
     cls.getId.mockReturnValue('corr-test');
     outbox = new OutboxService(cls);

@@ -3,11 +3,7 @@ import { ClsService } from 'nestjs-cls';
 import { mock, mockDeep } from 'vitest-mock-extended';
 import { PrismaService } from '../../../infra/prisma/prisma.service.js';
 import type { AuthenticatedUser } from '../../auth/authenticated-user.js';
-import {
-  CompanyOptional,
-  PlatformOnly,
-  StaffOnly,
-} from '../../auth/auth.decorators.js';
+import { PlatformOnly, StaffOnly } from '../../auth/auth.decorators.js';
 import { fakeContext } from '../../auth/guards/__tests__/testing.js';
 import { DomainError } from '../../errors/domain-error.js';
 import { TenantContext } from '../tenant-context.js';
@@ -16,11 +12,6 @@ import { TenantContextGuard } from '../tenant-context.guard.js';
 @StaffOnly()
 class CompanyController {
   list() {}
-}
-@StaffOnly()
-class OptionalController {
-  @CompanyOptional()
-  me() {}
 }
 @PlatformOnly()
 class PlatformController {
@@ -85,28 +76,6 @@ describe('TenantContextGuard', () => {
     ).rejects.toMatchObject({
       code: 'COMPANY_CONTEXT_REQUIRED',
       status: 400,
-    });
-  });
-
-  it('lets a super admin call a @CompanyOptional route without the header', async () => {
-    const { context, req } = fakeContext(
-      { handler: OptionalController.prototype.me, cls: OptionalController },
-      { user: admin, headers: {} },
-    );
-    await expect(guard.canActivate(context)).resolves.toBe(true);
-    expect(req.companyId).toBeUndefined();
-    expect(tenant.set).toHaveBeenCalledWith(
-      expect.objectContaining({ actingAs: false }),
-    );
-  });
-
-  it('still validates a header sent to a @CompanyOptional route', async () => {
-    const { context } = fakeContext(
-      { handler: OptionalController.prototype.me, cls: OptionalController },
-      { user: admin, headers: { 'x-company-id': 'nope' } },
-    );
-    await expect(guard.canActivate(context)).rejects.toMatchObject({
-      code: 'COMPANY_CONTEXT_REQUIRED',
     });
   });
 

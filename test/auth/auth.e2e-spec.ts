@@ -84,7 +84,7 @@ describe('auth and rbac (HTTP)', () => {
     it('authenticates from the cookie alone, and rejects a write from another origin', async () => {
       const res = await login(owner.email).expect(200);
       const cookie = `access_token=${cookieOf(res, 'access_token')!.value}`;
-      await http.get('/v1/admin/me').set('Cookie', cookie).expect(200);
+      await http.get('/v1/auth/me').set('Cookie', cookie).expect(200);
       await http
         .post('/v1/auth/password/change')
         .set({ Cookie: cookie, Origin: 'https://evil.test' })
@@ -206,70 +206,126 @@ describe('auth and rbac (HTTP)', () => {
   });
 
   describe('access rules', () => {
+    const any = '/v1/admin/__probe/any';
+
     it('lets public routes through and rejects other routes without a token', async () => {
       await http.get('/health').expect((r) => expect(r.status).not.toBe(401));
-      const res = await http.get('/v1/admin/me').expect(401);
+      const res = await http.get(any).expect(401);
       expect(res.body.code).toBe('UNAUTHENTICATED');
     });
 
     it('rejects a garbage token and an expired token', async () => {
-      await http.get('/v1/admin/me').set(bearer('garbage')).expect(401);
+      await http.get(any).set(bearer('garbage')).expect(401);
     });
 
     it('staff reach /admin and customers do not', async () => {
       const staffToken = await tokenFor(owner.email);
-      await http.get('/v1/admin/me').set(bearer(staffToken)).expect(200);
+      await http.get(any).set(bearer(staffToken)).expect(200);
 
       const client = await createAccount(prisma, 'CLIENT');
       const clientToken = await tokenFor(client.email);
-      await http.get('/v1/admin/me').set(bearer(clientToken)).expect(403);
+      await http.get(any).set(bearer(clientToken)).expect(403);
     });
 
-    it('/admin/me for staff lists their role permissions and company', async () => {
-      const res = await http
-        .get('/v1/admin/me')
-        .set(bearer(await tokenFor(owner.email)))
-        .expect(200);
-      expect(res.body.data.company.id).toBe(companyA.id);
-      expect(res.body.data.permissions).toEqual([...ALL_PERMISSIONS].sort());
-    });
-
-    it('/admin/me for a super admin works without X-Company-Id and lists every permission', async () => {
+    it('a super admin on a company route needs X-Company-Id and acts on that company', async () => {
       const token = await tokenFor(admin.email);
-      const bare = await http
-        .get('/v1/admin/me')
-        .set(bearer(token))
-        .expect(200);
-      expect(bare.body.data.company).toBeNull();
-      expect(bare.body.data.permissions).toEqual([...ALL_PERMISSIONS].sort());
+      const missing = await http.get(any).set(bearer(token)).expect(400);
+      expect(missing.body.code).toBe('COMPANY_CONTEXT_REQUIRED');
 
       const res = await http
-        .get('/v1/admin/me')
+        .get(any)
         .set({ ...bearer(token), 'X-Company-Id': companyB.id })
         .expect(200);
-      expect(res.body.data.company.id).toBe(companyB.id);
+      expect(res.body.data.companyId).toBe(companyB.id);
+    });
+
+    it('staff sending X-Company-Id still act only on their own company', async () => {
+      const res = await http
+        .get(any)
+        .set({
+          ...bearer(await tokenFor(owner.email)),
+          'X-Company-Id': companyB.id,
+        })
+        .expect(200);
+      expect(res.body.data.companyId).toBe(companyA.id);
+    });
+
+    it('a super admin naming a company that does not exist gets 404', async () => {
+      await http
+        .get(any)
+        .set({
+          ...bearer(await tokenFor(admin.email)),
+          'X-Company-Id': '0199c4a2-0000-7000-8000-0000000000ff',
+        })
+        .expect(404);
+    });
+  });
+
+  describe('GET /v1/auth/me', () => {
+    it('needs a login', async () => {
+      await http.get('/v1/auth/me').expect(401);
+    });
+
+    it('staff see their profile, employee ID, company and role permissions', async () => {
+      const res = await http
+        .get('/v1/auth/me')
+        .set(bearer(await tokenFor(owner.email)))
+        .expect(200);
+      expect(res.body.data).toMatchObject({
+        id: owner.id,
+        email: owner.email,
+        kind: 'STAFF',
+        employeeId: `bmt_${owner.id}`,
+        company: { id: companyA.id, status: 'ACTIVE' },
+      });
+      expect(res.body.data.company).toHaveProperty('cancellationPolicy');
+      expect(res.body.data.company).not.toHaveProperty(
+        'salesCommissionPercent',
+      );
       expect(res.body.data.permissions).toEqual([...ALL_PERMISSIONS].sort());
     });
 
-    it('staff sending X-Company-Id still see only their own company', async () => {
+    it('the super admin has no company and every permission, with or without a company header', async () => {
+      const token = await tokenFor(admin.email);
+      for (const headers of [{}, { 'X-Company-Id': companyB.id }]) {
+        const res = await http
+          .get('/v1/auth/me')
+          .set({ ...bearer(token), ...headers })
+          .expect(200);
+        expect(res.body.data).toMatchObject({
+          kind: 'SUPER_ADMIN',
+          company: null,
+          employeeId: null,
+        });
+        expect(res.body.data.permissions).toEqual([...ALL_PERMISSIONS].sort());
+      }
+    });
+
+    it('customers can read their own profile and hold no permissions', async () => {
+      const client = await createAccount(prisma, 'CLIENT');
       const res = await http
-        .get('/v1/admin/me')
+        .get('/v1/auth/me')
+        .set(bearer(await tokenFor(client.email)))
+        .expect(200);
+      expect(res.body.data).toMatchObject({
+        id: client.id,
+        kind: 'CLIENT',
+        company: null,
+        employeeId: null,
+        isOwner: false,
+        permissions: [],
+      });
+    });
+
+    it('ignores another company id sent by staff', async () => {
+      const res = await http
+        .get('/v1/auth/me')
         .set({
           ...bearer(await tokenFor(owner.email)),
           'X-Company-Id': companyB.id,
         })
         .expect(200);
       expect(res.body.data.company.id).toBe(companyA.id);
-    });
-
-    it('a super admin naming a company that does not exist gets 404', async () => {
-      await http
-        .get('/v1/admin/me')
-        .set({
-          ...bearer(await tokenFor(admin.email)),
-          'X-Company-Id': '0199c4a2-0000-7000-8000-0000000000ff',
-        })
-        .expect(404);
     });
   });
 
@@ -347,7 +403,7 @@ describe('auth and rbac (HTTP)', () => {
       const second = refreshCookie(res)!.value;
       expect(second).not.toBe(first);
       await http
-        .get('/v1/admin/me')
+        .get('/v1/auth/me')
         .set(bearer(res.body.data.accessToken))
         .expect(200);
     });

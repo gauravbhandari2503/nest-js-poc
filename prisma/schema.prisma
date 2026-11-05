@@ -248,12 +248,15 @@ model CompanyStaff {
   user          User           @relation(fields: [userId], references: [id])
   roleId        String         @map("role_id") @db.Uuid
   role          Role           @relation(fields: [roleId], references: [id])
+  /// The company's own staff number, or `bmt_<user id>` when none was given.
+  employeeId    String         @map("employee_id")
   isOwner       Boolean        @default(false) @map("is_owner")
   deactivatedAt DateTime?      @map("deactivated_at") @db.Timestamptz(3)
   createdAt     DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt     DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
   theaters      StaffTheater[]
 
+  @@unique([companyId, employeeId])
   @@index([companyId])
   @@index([roleId])
   @@map("company_staff")

@@ -5,7 +5,6 @@ import { PrismaService } from '../../infra/prisma/prisma.service.js';
 import { COMPANY_HEADER } from '../auth/authenticated-user.js';
 import {
   ALLOWED_KINDS_KEY,
-  COMPANY_OPTIONAL_KEY,
   IS_PUBLIC_KEY,
   type TenantRequest,
 } from '../auth/auth.decorators.js';
@@ -19,8 +18,7 @@ import { TenantContext } from './tenant-context.js';
  * - STAFF: the company in their token. The header is ignored, so staff can never reach
  *   another company.
  * - SUPER_ADMIN on a company route: the company in `X-Company-Id` (400 if missing or not a
- *   uuid, 404 if it does not exist). Routes marked `@CompanyOptional()` accept a missing
- *   header and run with no company.
+ *   uuid, 404 if it does not exist).
  * - Anything else on a company route: 403.
  *
  * Services receive `companyId` as a plain parameter and cannot tell the two apart.
@@ -77,16 +75,6 @@ export class TenantContextGuard implements CanActivate {
       companyId = user.companyId;
     } else if (user.kind === 'SUPER_ADMIN') {
       const header = request.headers[COMPANY_HEADER];
-      if (
-        header === undefined &&
-        this.reflector.getAllAndOverride<boolean | undefined>(
-          COMPANY_OPTIONAL_KEY,
-          targets,
-        )
-      ) {
-        this.tenant.set({ userId: user.id, kind: user.kind, actingAs: false });
-        return true;
-      }
       if (typeof header !== 'string' || !isUUID(header)) {
         throw new DomainError(
           ErrorCode.CompanyContextRequired,

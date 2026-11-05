@@ -7,7 +7,8 @@ import { MailService } from '../../../infra/mail/mail.service.js';
 import { PrismaService } from '../../../infra/prisma/prisma.service.js';
 import type { AuthTokenPurpose } from '../../../generated/prisma/client.js';
 import { PasswordHasher } from './password-hasher.js';
-import { hashToken, newOpaqueToken } from './token-hash.js';
+import { AuthTokenService } from './auth-token.service.js';
+import { hashToken } from './token-hash.js';
 import { TokenService } from './token.service.js';
 
 const HOUR_MS = 3_600_000;
@@ -25,32 +26,20 @@ export class PasswordService {
     private readonly prisma: PrismaService,
     private readonly hasher: PasswordHasher,
     private readonly tokens: TokenService,
+    private readonly authTokens: AuthTokenService,
     private readonly mail: MailService,
   ) {
     this.secret = config.get('JWT_REFRESH_SECRET', { infer: true });
     this.frontendOrigin = config.get('FRONTEND_ORIGIN', { infer: true });
   }
 
-  /**
-   * Creates a one-time token for `userId` and returns the raw value (only its hash is
-   * stored). Used here for password resets, and by company onboarding and staff
-   * invitations for the "set your password" email.
-   */
-  async issueToken(
+  /** A one-time token for `userId`; returns the raw value (only its hash is stored). */
+  issueToken(
     userId: string,
     purpose: AuthTokenPurpose,
     ttlMs: number,
   ): Promise<string> {
-    const token = newOpaqueToken();
-    await this.prisma.authToken.create({
-      data: {
-        userId,
-        purpose,
-        tokenHash: hashToken(this.secret, token),
-        expiresAt: new Date(Date.now() + ttlMs),
-      },
-    });
-    return token;
+    return this.authTokens.issue(userId, purpose, ttlMs);
   }
 
   /** New owner or invited staff chooses a first password; the account becomes ACTIVE. */

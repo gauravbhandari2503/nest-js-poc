@@ -72,7 +72,7 @@ Command services receive the actor explicitly (`create(actor, dto)`), never read
 | `StaffInvitationService` | Command | Create invitation + email token, accept invitation | A, Pub-auth |
 | `StaffService` | Command | Change role/theaters, deactivate | A |
 | `AdminStaffQueries` | Query | List staff and invitations | A |
-| `AdminMeQueries` | Query | Profile, company, theaters, permission list for the portal | A |
+| `MeQueries` | Query | The logged-in user: profile, company (staff), permission list for the portal | any |
 
 ### companies
 
@@ -82,7 +82,6 @@ Command services receive the actor explicitly (`create(actor, dto)`), never read
 | `CompanyRatesService` | Command | Commission rates, suspend/activate | P |
 | `CompanyPolicyService` | Command | Cancellation and refund policy | A |
 | `PlatformCompanyQueries` | Query | List/detail companies | P |
-| `AdminCompanyQueries` | Query | Own company | A |
 
 ### catalog
 
@@ -239,8 +238,6 @@ Prefix `/v1/admin`. Guard: `@StaffOnly()`. Tenant = `companyId` from the token; 
 
 | Method | Path | Controller (`controllers/admin-*`) | Calls | Permission |
 | --- | --- | --- | --- | --- |
-| GET | `/me` | `admin-me.controller` | `AdminMeQueries.get` | any staff |
-| GET | `/company` | `admin-company.controller` | `AdminCompanyQueries.get` | any staff |
 | PATCH | `/company` | `admin-company.controller` | `CompanyPolicyService.update` | `company.manage` |
 | PUT | `/company/membership-offers/{planId}` | `admin-membership-offers.controller` | `MembershipOfferService.upsert` | `membership.manage` |
 | GET | `/company/membership-offers` | `admin-membership-offers.controller` | `AdminMembershipQueries.list` | `membership.manage` |

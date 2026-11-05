@@ -23,7 +23,7 @@ All choices below are final for v1; anything marked "later" is added in the phas
 | Logging | `nestjs-pino` | JSON logs with correlation ID |
 | API docs | `@nestjs/swagger` + CLI plugin | `/docs` and `/docs-json` |
 | Security | `helmet`, `@nestjs/throttler` (Redis store) | CORS restricted to the frontend origin |
-| Health | `@nestjs/terminus` | `GET /health` checks Postgres and Redis |
+| Health | `@nestjs/terminus` | `GET /v1/health` checks Postgres and Redis |
 | File storage (later) | MinIO, S3-compatible | Movie posters |
 | Payments (later) | Stripe or Razorpay test mode | Webhooks + idempotency |
 | Testing | Vitest, `@nestjs/testing`, `supertest`, `vitest-mock-extended` | Separate test database (`book_my_ticket_test`), migrated with `pnpm prisma:migrate:test` and seeded with `pnpm prisma:seed:test` |

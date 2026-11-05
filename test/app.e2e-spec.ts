@@ -14,7 +14,7 @@ describe('app boot (e2e)', () => {
     await app.close();
   });
 
-  it('serves /health without a login', async () => {
-    await request(app.getHttpServer()).get('/health').expect(200);
+  it('serves /v1/health without a login', async () => {
+    await request(app.getHttpServer()).get('/v1/health').expect(200);
   });
 });

@@ -15,6 +15,6 @@ paths:
 - Status codes: `@Post` returns 201 by default; use `@HttpCode(200)` for actions that do not create (login, refresh), 202 for async, 204 for no body (return `void`).
 - Take the caller from `@CurrentUser()` and the company from `@CurrentCompany()`; pass `user.id` / `companyId` to the service as plain parameters. Do not read `req.user` yourself.
 - Use `@Res({ passthrough: true })` when you must set cookies or headers and still return a value.
-- A super admin may call a company route without `X-Company-Id` only where the route is marked `@CompanyOptional()` (for example `GET /v1/admin/me`).
+- A route for any kind of logged-in user (like `GET /v1/auth/me`) lives in an `auth-` controller with `@Authenticated()`; it is not a company route and has no company context.
 - Routes that create money or bookings and must be safe to retry take `@Idempotent()` (needs an `Idempotency-Key` header).
 - Add a stricter `@Throttle(...)` on login, register and password routes.

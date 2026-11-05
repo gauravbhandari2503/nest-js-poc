@@ -94,7 +94,8 @@ The clients switch on `code`, which is stable and documented; `description` is f
 | `UNAUTHENTICATED` / `TOKEN_EXPIRED` | 401 | Missing, invalid or expired access token |
 | `INVALID_CREDENTIALS` | 401 | Wrong email or password (one message for both, so accounts cannot be probed) |
 | `LINK_INVALID` | 422 | Emailed token (set/reset password) unknown, used or expired |
-| `EMAIL_TAKEN` | 409 | Registration with an email that already has an account |
+| `EMAIL_TAKEN` | 409 | Registration or onboarding with an email that already has an account |
+| `COMPANY_SLUG_TAKEN` | 409 | Onboarding a company whose slug already exists |
 | `FORBIDDEN` | 403 | Missing permission, or the route is not available to the caller's account type |
 | `COMPANY_CONTEXT_REQUIRED` | 400 | Super admin called a company route without a valid `X-Company-Id` |
 | `NOT_FOUND` | 404 | Missing or outside the caller's tenant |
@@ -122,7 +123,7 @@ The clients switch on `code`, which is stable and documented; `description` is f
 | --- | --- |
 | Access token | JWT, 15 minutes. Claims: `sub`, `kind`, `companyId` (staff only; the super admin has none). Sent as `Authorization: Bearer <JWT>` (the header wins) or as the `access_token` `HttpOnly; Secure; SameSite=Lax` cookie set by login and refresh. A cookie-authenticated `POST`/`PATCH`/`PUT`/`DELETE` is rejected with 403 (CSRF) when it has an `Origin` other than `FRONTEND_ORIGIN`; no `Origin` (Postman, curl, servers) is allowed, since browsers always send it on cross-site writes. The login body still returns the token for non-browser clients |
 | Refresh | `POST /v1/auth/refresh` using the `HttpOnly` refresh cookie; rotates on every use |
-| Permissions | Not in the token. `GET /v1/admin/me` returns the permission list so the portal can hide menus (the frontend works with permission codes only, never role names); the server still checks every call. **For a super admin the list is every permission code**, because they may do everything on company routes |
+| Permissions | Not in the token. `GET /v1/auth/me` returns the permission list so the portal can hide menus (the frontend works with permission codes only, never role names); the server still checks every call. **For a super admin the list is every permission code**, because they may do everything on company routes |
 | Throttling | Global default; `/auth/*` and `POST /client/bookings` stricter; per-IP and per-account |
 
 ## 4. Endpoint catalogue
@@ -139,6 +140,7 @@ The clients switch on `code`, which is stable and documented; `description` is f
 | POST | `/logout` | Revoke the session family |
 | POST | `/password/setup` | Set password with emailed token (new owner, invited staff) |
 | POST | `/password/forgot`, `/password/reset` | Reset flow (`forgot` always answers 202) |
+| GET | `/me` | The logged-in user, any kind: profile, `employeeId`, `isOwner`, `company` (staff only, else null) and `permissions` (super admin all, customers none). Needs a login, no company header |
 | POST | `/password/change` | Logged-in user changes their password (needs the current one); ends their other sessions |
 | POST | `/invitations/{token}/accept` | Staff accepts an invitation |
 
@@ -180,7 +182,7 @@ The clients switch on `code`, which is stable and documented; `description` is f
 | Caller | Company comes from | Permissions |
 | --- | --- | --- |
 | Company staff | Their token. An `X-Company-Id` header is ignored | Their role's permissions |
-| Super admin | The **`X-Company-Id`** header, required on every call: missing or not a uuid → `400 COMPANY_CONTEXT_REQUIRED`, unknown company → `404 NOT_FOUND`. Exception: `GET /admin/me` works without the header (`company: null`) so the portal can load the profile before a company is picked | All of them; `GET /me` returns every permission code. Theater scope (`staff_theaters`) does not apply |
+| Super admin | The **`X-Company-Id`** header, required on every call: missing or not a uuid → `400 COMPANY_CONTEXT_REQUIRED`, unknown company → `404 NOT_FOUND`. | All of them; `GET /me` returns every permission code. Theater scope (`staff_theaters`) does not apply |
 | Customer | n/a | `403 FORBIDDEN` |
 
 A suspended company can still be acted on by the super admin. Every write by a super admin is audit-logged with the actor and the company they acted on. Money and ledger records stay append-only for everyone.
@@ -188,7 +190,7 @@ A suspended company can still be acted on by the super admin. Every write by a s
 | Area | Endpoints | Permission |
 | --- | --- | --- |
 | Me | `GET /me` (profile, company, theaters, permissions) | any staff |
-| Company | `GET /company`, `PATCH /company` (policies); `GET /company/membership-offers`, `PUT /company/membership-offers/{planId}` (opt in/out + price) | any staff (read), `company.manage`, `membership.manage` |
+| Company | `PATCH /company` (policies; the company itself comes from `GET /v1/auth/me`); `GET /company/membership-offers`, `PUT /company/membership-offers/{planId}` (opt in/out + price) | any staff (read), `company.manage`, `membership.manage` |
 | Theaters | `GET/POST /theaters`, `GET/PATCH/DELETE /theaters/{id}` | `theater.read` (reads), `theater.manage` |
 | Screens & seats | `/theaters/{id}/screens`, `/screens/{id}`, `PUT /screens/{id}/seats` (layout), `/seat-categories` | `screen.read` (reads), `screen.manage` |
 | Shows | `GET/POST /shows`, `GET/PATCH /shows/{id}`, `PUT /shows/{id}/prices`, `POST /shows/{id}/cancellation` | `show.read` (reads), `show.manage`, `show.cancel` |
@@ -206,7 +208,7 @@ Maintenance staff see only their assigned theaters in every list.
 
 ### 4.5 Permission matrix
 
-The master list lives in one place: [src/common/auth/permissions.ts](../../../src/common/auth/permissions.ts) (`Permission`, `ALL_PERMISSIONS`, `SYSTEM_ROLE_PERMISSIONS`). Controllers, the seed and the portal's `GET /v1/admin/me` all read from it; a unit test (`permissions.spec.ts`) enforces unique codes, owner = everything, other roles ⊆ owner. Adding a permission = add it there, add it to the roles that need it, ship (the seed upserts it).
+The master list lives in one place: [src/common/auth/permissions.ts](../../../src/common/auth/permissions.ts) (`Permission`, `ALL_PERMISSIONS`, `SYSTEM_ROLE_PERMISSIONS`). Controllers, the seed and the portal's `GET /v1/auth/me` all read from it; a unit test (`permissions.spec.ts`) enforces unique codes, owner = everything, other roles ⊆ owner. Adding a permission = add it there, add it to the roles that need it, ship (the seed upserts it).
 
 | Code | Owner | Maintenance | Grants |
 | --- | :-: | :-: | --- |
@@ -237,14 +239,24 @@ Theater scope is separate from permissions: maintenance staff only act on theate
 
 | Area | Endpoints |
 | --- | --- |
-| Companies | `GET/POST /companies` (creates company + owner + sends setup email), `GET/PATCH /companies/{id}` (commission rates, status), `POST /companies/{id}/registration-fee` |
+| Companies | `GET/POST /companies` (creates company + owner + sends setup email; see below), `GET/PATCH /companies/{id}` (commission rates, status), `POST /companies/{id}/registration-fee` (see below) |
 | Catalog | `/movies`, `/cities` CRUD |
 | Membership plans | `/membership-plans` CRUD |
 | Tax | `GET /tax-rates`, `POST /tax-rates` (new effective rate; never edits) |
 | Requests | `/platform-requests` (list, update, resolve) |
 | Money | `GET /companies/{id}/balance`, `GET/POST /settlements` (`Idempotency-Key`), `POST /ledger-adjustments` (memo required) |
-| Audit | `GET /audit-logs?module=&companyId=&entityType=&from=&to=` |
+| Audit | `GET /audit-logs?companyId=&actorId=&module=&action=&entityType=&entityId=&from=&to=` (newest first, keyset paged; `from`/`to` are ISO 8601, inclusive) |
 | Dashboard | `GET /dashboard` (income, companies, bookings, pending payouts) |
+
+**`POST /v1/platform/companies`** (`201`). Body: `name`, optional `slug` (made from `name`), `salesCommissionPercent`, `membershipCommissionPercent` (percent, 0 to 100, up to two decimals, e.g. `12.5`; stored as basis points), `registrationFee` (paise), `cancellationPolicy`, `refundPolicy`, and `owner: { fullName, email, phone?, employeeId? }`. In one transaction it creates the company, the owner (`INVITED`, no password) with the system role `COMPANY_OWNER`, the audit entry and the outbox event `user.set_password_requested`. The worker then issues a 72-hour token and sends the "set your password" email; the owner opens the link and calls `POST /v1/auth/password/setup`. The worker (`pnpm start:worker`) must be running for the email to go out. Response `data`: `{ company, owner: { userId, email, fullName, employeeId, status } }`.
+
+**Company reads and edits.** `GET /v1/platform/companies?status=&q=&limit=&cursor=` lists newest first (`q` matches name or slug); `GET /v1/platform/companies/{id}` adds the owner. `PATCH /v1/platform/companies/{id}` takes any of `salesCommissionPercent`, `membershipCommissionPercent`, `status` (`ACTIVE` or `SUSPENDED`), at least one; it writes nothing and leaves no audit entry when nothing differs. Past bookings keep the rates they were made with. A suspended company's staff cannot log in or refresh (an access token already issued lasts up to 15 minutes). `POST /v1/platform/companies/{id}/registration-fee` (`200`) records the fee paid at the office, once: it sets `registrationFeePaidAt` and adds a `PLATFORM_INCOME` / `REGISTRATION_FEE` ledger entry for the fee amount (none when the fee is 0); a second call is `409 INVALID_STATE_TRANSITION`.
+
+**Resending the owner's invitation.** `POST /v1/platform/companies/{id}/owner/resend-invitation` (`202`) queues a new "set your password" email for an owner who has not set a password yet; the new link retires the old one (issuing a token retires earlier unused tokens of the same purpose). An owner who already has a password gets `409 INVALID_STATE_TRANSITION` and uses "forgot password". Audit action `company.owner_invitation_resent`.
+
+**Admin portal, own company.** The company's details (name, status, policies) come back in `GET /v1/auth/me`, without money terms. `PATCH /v1/admin/company` (`company.manage`) edits `cancellationPolicy` and `refundPolicy` (non-empty, at most 2000 characters; at least one field). The company always comes from the token (a super admin sends `X-Company-Id`).
+
+**Employee ID.** Every staff member, owners included, has an `employeeId`, unique inside their company. A company may give its own (letters, digits and `. _ - /`, at most 40 characters). When none is given the ID is `bmt_<user id>`.
 
 ### 4.7 Webhooks (`/v1/webhooks`)
 

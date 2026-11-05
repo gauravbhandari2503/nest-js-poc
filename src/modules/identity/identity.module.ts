@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { IdentityTokensModule } from './identity-tokens.module.js';
 import { AuthController } from './controllers/auth.controller.js';
 import { AuthPasswordController } from './controllers/auth-password.controller.js';
 import { AuthService } from './services/auth.service.js';
@@ -7,6 +8,7 @@ import { PasswordService } from './services/password.service.js';
 import { TokenService } from './services/token.service.js';
 
 @Module({
+  imports: [IdentityTokensModule],
   controllers: [AuthController, AuthPasswordController],
   providers: [AuthService, PasswordService, PasswordHasher, TokenService],
   exports: [PasswordService, PasswordHasher],

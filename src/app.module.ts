@@ -11,6 +11,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { JwtAuthGuard } from './common/auth/guards/jwt-auth.guard.js';
 import { PermissionsGuard } from './common/auth/guards/permissions.guard.js';
 import { TenantContextGuard } from './common/tenancy/tenant-context.guard.js';
+import { CompaniesModule } from './modules/companies/index.js';
 import { IdentityModule } from './modules/identity/index.js';
 import { RbacModule } from './modules/rbac/index.js';
 import type { Env } from './config/env.validation.js';
@@ -60,6 +61,7 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
     HealthModule,
     IdentityModule,
     RbacModule,
+    CompaniesModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: ProblemDetailsFilter },

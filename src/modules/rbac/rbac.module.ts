@@ -1,7 +1,7 @@
 import { Global, Module } from '@nestjs/common';
 import { PERMISSIONS_LOOKUP } from '../../common/auth/permissions-lookup.js';
-import { AdminMeController } from './controllers/admin-me.controller.js';
-import { AdminMeQueries } from './queries/admin-me.queries.js';
+import { AuthMeController } from './controllers/auth-me.controller.js';
+import { MeQueries } from './queries/me.queries.js';
 import { PermissionsSyncService } from './services/permissions-sync.service.js';
 import { PermissionsService } from './services/permissions.service.js';
 
@@ -11,9 +11,9 @@ import { PermissionsService } from './services/permissions.service.js';
  */
 @Global()
 @Module({
-  controllers: [AdminMeController],
+  controllers: [AuthMeController],
   providers: [
-    AdminMeQueries,
+    MeQueries,
     PermissionsService,
     PermissionsSyncService,
     { provide: PERMISSIONS_LOOKUP, useExisting: PermissionsService },

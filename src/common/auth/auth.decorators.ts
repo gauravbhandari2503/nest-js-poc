@@ -10,7 +10,6 @@ import type { AuthenticatedUser } from './authenticated-user.js';
 export const IS_PUBLIC_KEY = 'isPublic';
 export const ALLOWED_KINDS_KEY = 'allowedKinds';
 export const REQUIRED_PERMISSIONS_KEY = 'requiredPermissions';
-export const COMPANY_OPTIONAL_KEY = 'companyOptional';
 
 /** No authentication needed (`/v1/public`, login, webhooks). */
 export const Public = () => SetMetadata(IS_PUBLIC_KEY, true);
@@ -34,13 +33,6 @@ export const StaffOnly = () =>
 /** Platform routes (`/v1/platform`): the super admin only. */
 export const PlatformOnly = () =>
   SetMetadata(ALLOWED_KINDS_KEY, ['SUPER_ADMIN'] satisfies UserKind[]);
-
-/**
- * On a company route: a super admin may call it without `X-Company-Id` (no company is set).
- * For routes that are about the caller, like `GET /v1/admin/me`. A header that is sent is
- * still validated.
- */
-export const CompanyOptional = () => SetMetadata(COMPANY_OPTIONAL_KEY, true);
 
 /** Every listed permission is required. The super admin holds all of them. */
 export const RequirePermissions = (...permissions: PermissionCode[]) =>

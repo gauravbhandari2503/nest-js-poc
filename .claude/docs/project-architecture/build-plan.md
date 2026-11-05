@@ -19,7 +19,7 @@ Layer order matters: a module may import only modules in lower layers (identity/
 
 | # | Module(s) | What it delivers | Depends on | Exit check |
 | --- | --- | --- | --- | --- |
-| **1** | **identity + rbac (auth)** ✅ | `POST /auth/login`, `/refresh`, `/logout`, `/register` (customer); `JwtAuthGuard` registered globally with the tenant and permission guards switched on; `GET /admin/me` (permission list, all codes for a super admin); password set/forgot/reset by emailed token (Mailpit); Redis cache for permissions (60 s) | foundation | Log in as the **seeded super admin**; staff token reaches `/admin`, customer token does not; permission matrix test; refresh-token reuse revokes the whole family; staff with `X-Company-Id` still sees only their own company |
+| **1** | **identity + rbac (auth)** ✅ | `POST /auth/login`, `/refresh`, `/logout`, `/register` (customer); `JwtAuthGuard` registered globally with the tenant and permission guards switched on; `GET /auth/me` (current user: profile, company, permission list, all codes for a super admin); password set/forgot/reset by emailed token (Mailpit); Redis cache for permissions (60 s) | foundation | Log in as the **seeded super admin**; staff token reaches `/admin`, customer token does not; permission matrix test; refresh-token reuse revokes the whole family; staff with `X-Company-Id` still sees only their own company |
 | **2** | **companies + staff + audit** | Super admin onboards a company (company + owner user + setup email), commission rates, suspend/activate, registration fee; owner invites staff, accepts invitation, changes role/theaters, deactivates; **audit log** writing (actor, company, `actingAs`) | 1 | Onboard → email in Mailpit → owner sets password and logs in; invite → accept → staff can act; every platform and admin write appears in the audit log |
 | **3** | **catalog + venues** | Cities and movies (super admin) plus public browse; theaters, screens, seat categories, seat layout (`PUT .../seats`) | 1, 2 | Tenant isolation tests on every venue endpoint; composite FK rejects cross-company data through the API |
 | **4** | **pricing + shows** | Tax rate history; the pure price calculator; shows with prices per seat category; the overlap rule surfaced as `SHOW_OVERLAP`; show cancel (state only) | 3 | Overlap rejected by the database and mapped to the error code; back-to-back allowed; calculator property tests (total equals sum of lines, discount never exceeds list) |
@@ -33,12 +33,18 @@ Layer order matters: a module may import only modules in lower layers (identity/
 
 ### Milestone 1 as built
 
-- Code: `src/modules/identity` (register, login, refresh, logout, password setup/forgot/reset/change, token rotation) and `src/modules/rbac` (`GET /v1/admin/me`). The guards and permission cache are in `src/common/auth`.
+- Code: `src/modules/identity` (register, login, refresh, logout, password setup/forgot/reset/change, token rotation) and `src/modules/rbac` (`GET /v1/auth/me`). The guards and permission cache are in `src/common/auth`.
 - Access token: JWT, 15 min, claims `sub`, `kind`, `companyId`. Refresh token: opaque, HMAC-hashed in `refresh_tokens`, `HttpOnly; Secure; SameSite=Lax` cookie on path `/v1/auth`, rotated per use; reuse revokes the family. A refresh re-reads the account, so deactivated staff, suspended companies and disabled users are cut off at the next refresh.
 - Password links: `SET_PASSWORD` 72 h and `RESET_PASSWORD` 1 h, single use. `PasswordService.issueToken` is exported for milestone 2 (onboarding and invitations). `forgot` always answers 202 so emails cannot be probed.
 - `/v1/auth/*` is throttled at 10 requests a minute (5 for the password routes), per IP.
 - Decisions taken for the two open questions: customer registration has **no** email verification yet, and `POST /v1/auth/password/change` exists so the seeded admin can replace the seed password.
 - e2e tests use `unplugin-swc` (decorator metadata for Nest DI) and a probe controller to test the permission matrix.
+
+### Milestone 2 progress
+
+- **Slice 1 done: company onboarding.** `POST /v1/platform/companies` (module `companies`), the audit log writer (`AuditService.record(tx, …)` in module `audit`), and the owner's "set your password" email through the outbox (handler in `identity/jobs`, run by the worker). `company_staff.employee_id` is new: unique per company, default `bmt_<user id>` (rule in `rbac/domain/employee-id.ts`). Covered by `test/companies/onboarding.e2e-spec.ts`, which goes from onboarding to the owner logging in.
+- **Slice 2 done: company reads and platform admin.** `GET /v1/platform/companies` (keyset paged, status and name filters) and `/{id}`; `PATCH` for commission rates and suspend/activate; `POST /{id}/registration-fee` (marks the company paid and writes the `REGISTRATION_FEE` ledger entry directly, until the ledger module of milestone 8 owns that write); `GET /v1/platform/audit-logs` (module `audit`); `PATCH /v1/admin/company` (policies, `company.manage`; the company itself is in `GET /v1/auth/me`). Covered by `test/companies/platform-companies.e2e-spec.ts` and `admin-company.e2e-spec.ts`.
+- Next: slice 3 (staff invitations and management).
 
 ## Why this order
 

@@ -304,7 +304,7 @@ graph LR
 - **Permissions** are loaded per user and cached in Redis (60 s TTL, evicted when roles change), so revoking a role takes effect within a minute and tokens stay small.
 - **Guards** are declarative; **services** enforce what guards cannot: that the target row belongs to the caller's company, and that maintenance staff act only on their assigned theaters. Every tenant-table query includes `company_id`.
 - Super admin routes live under `/v1/platform/*` and are guarded by `@PlatformOnly()`; a company token can never reach them.
-- **The super admin may also call any `/v1/admin/*` route** (ADR-010). Routes marked `@StaffOnly()` admit `STAFF` and `SUPER_ADMIN`. `TenantContextGuard` is the only place that picks the company: staff get the one in their token (a header is ignored); a super admin must send `X-Company-Id`. `PermissionsService.forUser()` returns every permission for a super admin, and both the permission guard and `GET /admin/me` use it, so the menus the frontend shows and what the server allows cannot differ. Services still just take `companyId`; they cannot tell the two apart.
+- **The super admin may also call any `/v1/admin/*` route** (ADR-010). Routes marked `@StaffOnly()` admit `STAFF` and `SUPER_ADMIN`. `TenantContextGuard` is the only place that picks the company: staff get the one in their token (a header is ignored); a super admin must send `X-Company-Id`. `PermissionsService.forUser()` returns every permission for a super admin, and both the permission guard and `GET /auth/me` use it, so the menus the frontend shows and what the server allows cannot differ. Services still just take `companyId`; they cannot tell the two apart.
 - Missing or foreign resource → **404**, never 403 (do not leak existence).
 
 ### 8.3 Auth flows
@@ -342,7 +342,7 @@ graph LR
 | --- | --- |
 | Correlation | `nestjs-cls` creates/accepts `x-correlation-id` per request; `nestjs-pino` stamps every log line; the id is copied into outbox payloads and job data, so one search follows a booking from HTTP through the worker |
 | Logs | JSON in prod, pretty in dev; levels from `LOG_LEVEL` |
-| Health | `GET /health` (Postgres + Redis); used for liveness/readiness |
+| Health | `GET /v1/health` (Postgres + Redis); used for liveness/readiness |
 | Queues | Bull Board at `/queues` (restrict to super admin before any shared environment) |
 | Metrics / traces | `@nestjs/observe`; business metrics worth alerting on: holds expiring per minute, outbox lag, failed jobs, 409 `SEAT_UNAVAILABLE` rate, payments `INITIATED` older than 15 min |
 | Graceful shutdown | `enableShutdownHooks()`; workers finish the active job before exit |
@@ -412,7 +412,7 @@ graph LR
 - **Context**: Spec requires permission-based access; owners hold all company permissions; staff invited with a role.
 - **Decision**: `permissions` (from a code constant), `roles` (system roles seeded now; schema allows company roles later), Nest guards, ownership checks in services.
 - **Alternatives**: CASL (per tech-stack, only if rules grow); plain role checks (not what the spec asks for).
-- **Consequences**: + the admin portal can hide menus from the same permission list (`GET /v1/admin/me` returns it). − adding a permission requires a seed/migration.
+- **Consequences**: + the admin portal can hide menus from the same permission list (`GET /v1/auth/me` returns it). − adding a permission requires a seed/migration.
 
 ### ADR-008 — REST, URI-versioned, split by surface
 
@@ -429,7 +429,7 @@ graph LR
 ### ADR-010 — The super admin acts on companies through the admin routes
 
 - **Context**: The super admin must be able to do anything a company can (fix a show, correct a price, help a stuck owner), and the admin portal and platform portal may live in one frontend repo. Duplicating every company route under `/platform` would double the surface.
-- **Decision**: `/v1/admin/*` accepts `STAFF` and `SUPER_ADMIN`. A super admin names the company in the `X-Company-Id` header on every call. One guard (`TenantContextGuard`) resolves the company; the header is honoured for `SUPER_ADMIN` only. The super admin holds every permission code, so `GET /admin/me` returns all of them. Every write is audit-logged with actor and company (`TenantContext.actingAs`).
+- **Decision**: `/v1/admin/*` accepts `STAFF` and `SUPER_ADMIN`. A super admin names the company in the `X-Company-Id` header on every call. One guard (`TenantContextGuard`) resolves the company; the header is honoured for `SUPER_ADMIN` only. The super admin holds every permission code, so `GET /auth/me` returns all of them. Every write is audit-logged with actor and company (`TenantContext.actingAs`).
 - **Alternatives**: duplicate routes under `/platform` (more code, two places to fix bugs); impersonate a staff user (muddy audit trail, tokens that lie about who acted).
 - **Consequences**: + no duplicated routes, services unchanged, one frontend. − the "company only from the token" rule gains one exception, so it is enforced in exactly one guard and covered by tests (staff with the header still see only their own company; a super admin without it gets 400).
 

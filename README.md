@@ -61,7 +61,7 @@ Then start the app and, optionally, the database UI (each in its own terminal):
 
 ```bash
 $ pnpm start:dev           # API with hot reload (frees PORT first if it is still in use)
-$ pnpm start:worker        # BullMQ worker, only needed when working on queues/cron
+$ pnpm start:worker        # background worker: sends the emails (onboarding, invitations) and runs queues/cron
 $ pnpm prisma:studio       # Prisma Studio, the database UI at http://localhost:5555 (keep the terminal open)
 ```
 
@@ -69,7 +69,7 @@ $ pnpm prisma:studio       # Prisma Studio, the database UI at http://localhost:
 | --- | --- |
 | `http://localhost:5555` | Prisma Studio (database UI) |
 | `https://bookmyticket.test:3000/docs` | Swagger UI (`/docs-json` for the spec) |
-| `https://bookmyticket.test:3000/health` | Postgres + Redis health |
+| `https://bookmyticket.test:3000/v1/health` | Postgres + Redis health |
 | `https://bookmyticket.test:3000/queues` | Bull Board |
 
 The worker process (BullMQ processors, cron) runs separately: `pnpm start:worker`.

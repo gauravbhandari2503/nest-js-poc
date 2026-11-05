@@ -13,7 +13,7 @@ const cacheKey = (userId: string) => `permissions:${userId}`;
 
 /**
  * The one answer to "what may this user do on company routes?". The permission guard
- * and `GET /v1/admin/me` (which the frontend uses to hide menus) both call it, so what
+ * and `GET /v1/auth/me` (which the frontend uses to hide menus) both call it, so what
  * the UI shows and what the server allows cannot drift apart.
  *
  * - SUPER_ADMIN: every permission (they may act on any company).

@@ -4,7 +4,10 @@ import { ThrottlerStorage } from '@nestjs/throttler';
 import argon2 from 'argon2';
 import { AppModule } from '../../src/app.module.js';
 import { Permission, SystemRole } from '../../src/common/auth/permissions.js';
-import { RequirePermissions } from '../../src/common/auth/auth.decorators.js';
+import {
+  CurrentCompany,
+  RequirePermissions,
+} from '../../src/common/auth/auth.decorators.js';
 import { AdminApi } from '../../src/common/auth/surfaces.js';
 import { validationExceptionFactory } from '../../src/common/pipes/validation-exception.factory.js';
 import type { PrismaClient } from '../../src/generated/prisma/client.js';
@@ -18,6 +21,12 @@ import { createCompany, uid } from '../db/helpers.js';
 @AdminApi()
 @Controller('v1/admin/__probe')
 export class ProbeController {
+  /** Any staff member; echoes the company the guards resolved. */
+  @Get('any')
+  any(@CurrentCompany() companyId: string) {
+    return { companyId };
+  }
+
   @Get('show-manage')
   @RequirePermissions(Permission.ShowManage)
   showManage() {
@@ -76,6 +85,7 @@ export async function createAccount(
   options: {
     companyId?: string;
     roleName?: string;
+    isOwner?: boolean;
     status?: 'INVITED' | 'ACTIVE' | 'DISABLED';
     password?: string | null;
   } = {},
@@ -103,6 +113,8 @@ export async function createAccount(
       data: {
         companyId: options.companyId!,
         userId: user.id,
+        employeeId: `bmt_${user.id}`,
+        isOwner: options.isOwner ?? false,
         roleId: role.id,
       },
     });
